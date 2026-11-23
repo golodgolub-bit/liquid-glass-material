@@ -16,7 +16,11 @@ test('switch tap, keyboard and programmatic updates have distinct single-commit 
   const toggle=page.getByRole('switch',{name:'Preview connection'});await toggle.click();await expect(toggle).not.toBeChecked();expect(await page.evaluate(()=>(window as any).glassControls.events)).toBe(1);
   await toggle.focus();await page.keyboard.press('Space');await expect(toggle).toBeChecked();expect(await page.evaluate(()=>(window as any).glassControls.events)).toBe(2);
   await page.evaluate(()=>(window as any).glassControls.preview.setChecked(false));await expect(toggle).not.toBeChecked();expect(await page.evaluate(()=>(window as any).glassControls.events)).toBe(2);
-  await expect.poll(()=>page.evaluate(()=>(window as any).glassControls.renderer.idle)).toBe(true);
+  // Spring completion precedes asynchronous compositor/readability completion.
+  await page.evaluate(async()=>{await (window as any).glassControls.preview.surface.settled();});
+  await expect.poll(()=>page.evaluate(()=>(window as any).glassControls.renderer.idle),{timeout:15000}).toBe(true);
+  const frames=await page.evaluate(()=>(window as any).glassControls.renderer.stats.frames);await page.waitForTimeout(200);
+  expect(await page.evaluate(()=>(window as any).glassControls.renderer.stats.frames)).toBe(frames);
 });
 test('captured dragging survives capture failure and cancellation restores the committed state',async({page})=>{
   await page.goto('/examples/controls/');await page.evaluate(()=>{const g=(window as any).glassControls;g.events=0;g.preview.element.setPointerCapture=()=>{throw new Error('Host capture unavailable');};g.preview.element.addEventListener('change',()=>g.events++);g.preview.element.addEventListener('pointerdown',(e:PointerEvent)=>g.pointerId=e.pointerId);});
