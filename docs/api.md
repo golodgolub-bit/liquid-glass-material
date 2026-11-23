@@ -163,7 +163,7 @@ export interface GlassMaterial {
     /** Local ambient color carried into the surface and its shadow. */
     ambientSpill: number;
     refraction: number;
-    /** Interior lens magnification, independent from the curved edge. */
+    /** Interior image scale [0.5,2]; values below one minify transmitted content. */
     magnification: number;
     dispersion: number;
     /** Refractive index and strength of environment reflection. */
@@ -209,7 +209,7 @@ export declare const materials: Readonly<{
         /** Local ambient color carried into the surface and its shadow. */
         ambientSpill: number;
         refraction: number;
-        /** Interior lens magnification, independent from the curved edge. */
+        /** Interior image scale [0.5,2]; values below one minify transmitted content. */
         magnification: number;
         dispersion: number;
         /** Refractive index and strength of environment reflection. */
@@ -254,7 +254,7 @@ export declare const materials: Readonly<{
         shadowOffset: number;
         /** Local ambient color carried into the surface and its shadow. */
         ambientSpill: number;
-        /** Interior lens magnification, independent from the curved edge. */
+        /** Interior image scale [0.5,2]; values below one minify transmitted content. */
         magnification: number;
         dispersion: number;
         /** Refractive index and strength of environment reflection. */
@@ -297,7 +297,7 @@ export declare const materials: Readonly<{
         shadowOffset: number;
         /** Local ambient color carried into the surface and its shadow. */
         ambientSpill: number;
-        /** Interior lens magnification, independent from the curved edge. */
+        /** Interior image scale [0.5,2]; values below one minify transmitted content. */
         magnification: number;
         dispersion: number;
         /** Refractive index and strength of environment reflection. */
@@ -337,7 +337,7 @@ export declare const materials: Readonly<{
         /** Local ambient color carried into the surface and its shadow. */
         ambientSpill: number;
         refraction: number;
-        /** Interior lens magnification, independent from the curved edge. */
+        /** Interior image scale [0.5,2]; values below one minify transmitted content. */
         magnification: number;
         dispersion: number;
         /** Refractive index and strength of environment reflection. */
@@ -427,6 +427,8 @@ export interface SurfaceOptions {
     shape?: GlassShape;
     /** Local transparent content, painted above this material and visible to higher glass layers. */
     content?: BackdropSource;
+    /** Opacity of local foreground content, independent of material visibility. */
+    contentOpacity?: number;
     physics?: PhysicsOptions;
     deform?: DeformationFunction;
     contrast?: ContrastSettings | false;
@@ -437,6 +439,7 @@ export interface SurfaceState {
     visualRect: Rect;
     velocity: Rect;
     visibility: number;
+    contentOpacity: number;
     pressed: number;
     energy: number;
     moving: boolean;
@@ -457,6 +460,7 @@ export interface RenderStats {
     textureBytes: number;
     foregroundUploads: number;
     reflectionUploads: number;
+    contentUploads: number;
     contrastCopies: number;
     contrastReadbacks: number;
 }
@@ -518,6 +522,7 @@ export declare class GlassRenderer {
     releaseInteractions(): void;
     setShape(id: string, shape: GlassShape | null, options?: MotionOptions): Promise<MotionResult>;
     setContent(id: string, source: BackdropSource | null): void;
+    setContentOpacity(id: string, opacity: number, animate?: boolean): void;
     contains(id: string, x: number, y: number): boolean;
     removeSurface(id: string): void;
     /** No active/scheduled frame or pending readability work. Disposed renderers are idle. */
@@ -551,6 +556,7 @@ export declare class SurfaceHandle {
     animateMaterial(options: Partial<GlassMaterial>, motion?: MotionOptions): Promise<MotionResult>;
     shape(shape: GlassShape | null, options?: MotionOptions): Promise<MotionResult>;
     content(source: BackdropSource | null): this;
+    contentOpacity(opacity: number, animate?: boolean): this;
     contains(x: number, y: number): boolean;
     show(options?: MotionOptions): Promise<MotionResult>;
     hide(options?: MotionOptions): Promise<MotionResult>;
@@ -1088,14 +1094,12 @@ export interface Control<T extends HTMLElement> extends ElementBinding {
     element: T;
 }
 export declare function glassButton(renderer: GlassRenderer, parent: HTMLElement, label: string, options?: ControlOptions): Control<HTMLButtonElement>;
-export interface ToggleControl extends Control<HTMLButtonElement> {
-    setChecked: (checked: boolean) => void;
-    readonly checked: boolean;
-}
-export declare function glassToggle(renderer: GlassRenderer, parent: HTMLElement, label: string, checked?: boolean, options?: ControlOptions): ToggleControl;
+export { glassToggle } from './toggle.js';
+export type { ToggleControl, ToggleOptions } from './toggle.js';
 export interface SliderControl extends Control<HTMLDivElement> {
     input: HTMLInputElement;
     setValue: (value: number) => void;
+    setPressed: (pressed: boolean) => void;
 }
 export declare function glassSlider(renderer: GlassRenderer, parent: HTMLElement, label: string, value?: number, options?: ControlOptions & {
     min?: number;
@@ -1109,6 +1113,41 @@ export interface TabsControl extends Control<HTMLDivElement> {
 export declare function glassTabs(renderer: GlassRenderer, parent: HTMLElement, labels: readonly string[], options?: ControlOptions & {
     label?: string;
 }): TabsControl;
+```
+
+## toggle
+
+```ts
+import { type GlassMaterial, type RGB } from './material.js';
+import type { GlassRenderer, SurfaceHandle } from './renderer.js';
+import type { SpringOptions } from './motion.js';
+import type { Control, ControlOptions } from './components.js';
+export type ToggleOptions = ControlOptions & {
+    disabled?: boolean;
+    onChange?: (checked: boolean) => void;
+    accentColor?: RGB;
+    offColor?: RGB;
+    thumbColor?: RGB;
+    activeMaterial?: Partial<GlassMaterial>;
+    activeContentOpacity?: number;
+    trackingSpring?: SpringOptions;
+    releaseSpring?: SpringOptions;
+    /** Display position-independent on/off marks in addition to color. */
+    onOffLabels?: boolean;
+};
+export interface ToggleControl extends Control<HTMLButtonElement> {
+    readonly checked: boolean;
+    readonly disabled: boolean;
+    readonly track: HTMLElement;
+    readonly thumb: HTMLElement;
+    readonly trackSurface: SurfaceHandle;
+    /** Programmatic updates do not emit change. */
+    setChecked: (checked: boolean, animate?: boolean) => void;
+    setDisabled: (disabled: boolean) => void;
+    setPressed: (pressed: boolean) => void;
+}
+/** An opaque resting thumb becomes a refractive lens during captured interaction. */
+export declare function glassToggle(renderer: GlassRenderer, parent: HTMLElement, label: string, initial?: boolean, options?: ToggleOptions): ToggleControl;
 ```
 
 ## presentation
@@ -1309,7 +1348,7 @@ export type { GlassShape } from './shape.js';
 export { bindElement, observeSize } from './dom.js';
 export type { ElementBinding } from './dom.js';
 export { glassButton, glassToggle, glassSlider, glassTabs } from './components.js';
-export type { Control, ControlOptions, ToggleControl, SliderControl, TabsControl } from './components.js';
+export type { Control, ControlOptions, ToggleControl, ToggleOptions, SliderControl, TabsControl } from './components.js';
 export { glassPopover, glassSheet } from './presentation.js';
 export type { PanelController, PanelOptions, SheetController, MenuItem } from './presentation.js';
 export { glassSearch } from './search.js';

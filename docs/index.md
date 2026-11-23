@@ -4,6 +4,8 @@ A programmable WebGL 2 material for interfaces, applications and WebView hosts. 
 
 ## Start here
 
+New to the library? Follow [Quick start](quick-start.md), then [Basic controls](basic-controls.md), [Switches](switches.md) and [Animation basics](animation-basics.md). Each guide explains what to build, how it should respond and which integration mistakes to avoid.
+
 1. [Install and integrate](integration.md) the renderer with your app's background.
 2. [Create a material](api.md#glassmaterial) and bind accessible DOM controls.
 3. [Coordinate effect identities and transitions](containers.md) in a shared container.
@@ -11,7 +13,7 @@ A programmable WebGL 2 material for interfaces, applications and WebView hosts. 
 5. [Adapt foreground contrast](readability.md) and [material size response](material-response.md).
 6. [Program shaders and physics](programmability.md) or use the [ray optics helpers](ray-optics.md).
 
-Run `npm install`, then `npm run dev`. Open `/` for the laboratory, `/examples/gallery/` for editorial material studies, `/examples/workbench/` for the live GLSL editor and `/examples/programmatic/` for continuous animation. `/examples/readability/` exposes contrast and size behavior; `/examples/reference/` provides a fixed comparison fixture. `/examples/dispersion/` compares wavelength-dependent clear and scattered transmission.
+Run `npm install`, then `npm run dev`. Open `/` for the laboratory, `/examples/gallery/` for editorial material studies, `/examples/workbench/` for the live GLSL editor and `/examples/programmatic/` for continuous animation. `/examples/readability/` exposes contrast and size behavior; `/examples/reference/` provides a fixed comparison fixture. `/examples/dispersion/` compares wavelength-dependent clear and scattered transmission. `/examples/controls/` provides a settings form and an interactive introduction to motion.
 
 ## Material capabilities
 

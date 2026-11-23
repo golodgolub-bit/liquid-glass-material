@@ -79,3 +79,9 @@ program.cancel();
 ```
 
 Use the shared scheduler instead of a second permanent `requestAnimationFrame`. Pausing preserves elapsed program time. Background tabs suspend rendering, and nonessential programs suspend under Reduced Motion. See [Animation recipes](animations.md) for source updates and cleanup.
+
+## Local foreground opacity
+
+`SurfaceOptions.contentOpacity` defaults to 1. `surface.contentOpacity(value, animate = true)` animates the local content alpha independently of the material, on the material spring channel. Values must be finite in [0,1]. The current clamped value is available in `surface.state.contentOpacity`. A full fragment that implements the local-content branch must preserve `uniform float contentOpacity` and multiply it into the content alpha. Template hooks retain this stage automatically. See [Animation basics](animation-basics.md) and [Switches](switches.md).
+
+The `magnification` range is 0.5–2. Values below one minify transmitted content while retaining the same silhouette; one keeps interior scale unchanged. This is a programmable image-scale operation, not proof of a recovered physical Apple lens.

@@ -29,7 +29,7 @@ export type {GlassShape} from './shape.js';
 export { bindElement, observeSize } from './dom.js';
 export type { ElementBinding } from './dom.js';
 export { glassButton, glassToggle, glassSlider, glassTabs } from './components.js';
-export type { Control, ControlOptions, ToggleControl, SliderControl, TabsControl } from './components.js';
+export type { Control, ControlOptions, ToggleControl, ToggleOptions, SliderControl, TabsControl } from './components.js';
 export { glassPopover,glassSheet } from './presentation.js';
 export type { PanelController,PanelOptions,SheetController,MenuItem } from './presentation.js';
 export {glassSearch} from './search.js';

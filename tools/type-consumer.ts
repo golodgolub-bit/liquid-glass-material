@@ -46,3 +46,6 @@ import {evaluateContrastBounds,measureMaterialFootprint} from '../dist/index.js'
 void evaluateContrastBounds({minimum:[0,0,0],maximum:[1,1,1]});
 void resolveMaterialForSize(materials.regular,measureMaterialFootprint([{x:0,y:0,width:120,height:48}]));
 const liftedSelection=bindLiquidSelection(renderer,parent,{id:'typed-lift',items:[parent],physics:{press:{frequency:4}},lift:{scale:[1.2,1.6],offset:[0,-4],trackingSpring:{frequency:12},releaseSpring:{frequency:4,damping:.9},material:{abbeNumber:58}}});liftedSelection.dispose();
+
+front.contentOpacity(.5).contentOpacity(1,false);void front.state.contentOpacity;
+const typedToggle=glassToggle(renderer,parent,"Typed switch",false,{activeContentOpacity:.05,onOffLabels:true,accentColor:[.2,.7,.3],activeMaterial:{magnification:.8},onChange:checked=>{void checked;}});typedToggle.setPressed(true);typedToggle.setDisabled(false);typedToggle.setChecked(true,false);void typedToggle.trackSurface;typedToggle.dispose();

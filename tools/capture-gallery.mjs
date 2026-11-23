@@ -22,6 +22,6 @@ try{
   await page.evaluate(async()=>{const g=window.glassReadability;await Promise.all([g.front,g.clear,g.dimmed,g.panel].map(s=>s.contrastReady()));await Promise.all([g.front,g.clear,g.dimmed,g.panel].map(s=>s.settled()));});
   await page.locator('.study').screenshot({path:'docs/images/response.jpg',type:'jpeg',quality:92});
   const measurements=await page.evaluate(()=>{const g=window.glassReadability;return Object.fromEntries(['front','clear','dimmed','panel'].map(id=>[id,{foreground:g[id].foreground,contrast:g[id].state.contrast,material:g[id].state.material}]));});
-  await writeFile('artifacts/readability-v0.8.json',JSON.stringify(measurements,null,2));console.log('Captured docs/images/response.jpg and measured contrast states');
+  await writeFile('artifacts/readability.json',JSON.stringify(measurements,null,2));console.log('Captured docs/images/response.jpg and measured contrast states');
 }finally{await browser.close();await writeFile('artifacts/gallery-errors.json',JSON.stringify(errors,null,2));}
 if(errors.length)throw new Error(errors.join('\n'));

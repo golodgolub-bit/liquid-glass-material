@@ -1,5 +1,19 @@
 # Performance
 
+## v0.10: interactive switch composition
+
+23 November 2026, Windows / Edge / Intel UHD Graphics (0x9B41), ANGLE D3D11; 800×500 at DPR 1. Each switch has two compositor surfaces: its painted rail and its pressed glass thumb. A program retargets states at 3 Hz; 30 warmup frames precede 60 measured frames. This measures rendering, not pointer latency. Labels sit outside the lenses, so there are no foreground readability probes in this scene.
+
+| Switches | GPU median / p95 | CPU median / p95 | Frame p95 | Frames during idle |
+|---|---:|---:|---:|---:|
+| 1 | 1.47 / 1.50 ms | 0.7 / 1.5 ms | 17.5 ms | 0 |
+| 8 | 2.07 / 2.15 ms | 2.0 / 4.2 ms | 18.5 ms | 0 |
+| 24 | 4.43 / 7.77 ms | 3.4 / 8.3 ms | 23.1 ms | 0 |
+
+The controls remain mounted during the 250 ms idle check. The renderer stops requesting frames after the program and press state settle. The backdrop uploads once; local rail content updates during motion. `RenderStats.contentUploads` counts these uploads separately from `uploads`, `foregroundUploads` and `reflectionUploads`. Same-sized local content reuses its GPU allocation with `texSubImage2D`; a dimension change reallocates it. Reuse avoids allocation churn, but does not eliminate upload or composition costs.
+
+[Raw report](benchmarks/v0.10-controls-hardware.json) and [benchmark source](../tools/benchmark-controls.mjs). Short runs include scheduling noise. Several frame p95 values exceed the 16.67 ms budget; sustained 60/120 Hz and Android performance remain unverified. The v0.9 optical/readability results below remain a separate workload.
+
 ## v0.9: conservative RGB ranges and spectral scattering
 
 23 November 2026, Windows / Edge / Intel UHD Graphics (0x9B41), ANGLE D3D11; 800×500 at DPR 1. Each scene has 60 measured frames after warmup. Default readability and size response are enabled; the spectral run uses Vd=58. Empty rAF median is 16.7 ms. Analysis uses 32×32 lower/upper bound tiles and a shared native-resolution workspace.

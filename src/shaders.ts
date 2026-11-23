@@ -48,6 +48,7 @@ uniform sampler2D surfaceContent;uniform float contentOnly;
 uniform vec4 optics; // thickness, refraction, dispersion, frost
 uniform vec4 finish; // saturation, highlight, shadow, dimming
 uniform vec4 tint;
+uniform float contentOpacity;
 uniform vec3 physical; // ior, environment reflection, corner power
 uniform vec2 medium; // surrounding IOR, Vd (0 disables Cauchy dispersion)
 uniform vec3 absorption; // Beer-Lambert extinction per CSS pixel
@@ -137,7 +138,7 @@ void main() {
     if(coverage<.001)discard;
     vec2 local=(p-shapes[0].xy)/(shapes[0].zw*2.0)+.5;
     vec4 ink=texture(surfaceContent,vec2(local.x,1.0-local.y));
-    float alpha=ink.a*coverage*clamp(boundary.w,0.0,1.0);color=vec4(ink.rgb*alpha,alpha);return;
+    float alpha=ink.a*coverage*clamp(boundary.w,0.0,1.0)*contentOpacity;color=vec4(ink.rgb*alpha,alpha);return;
   }
   float shadowDistance = d - boundary.z * edgeFinish.w;
   float presence = clamp(boundary.w, 0.0, 1.0);

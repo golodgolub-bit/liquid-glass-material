@@ -1,6 +1,6 @@
 # Validation
 
-Local v0.9.0 verification covers **25 unit tests and 62 browser checks** on the hardware path below. NodeNext declarations, built ESM rendering, demo and host-asset builds are checked separately.
+Local v0.10.0 verification covers **25 unit tests and 71 browser checks** on the hardware path below. NodeNext declarations, built ESM rendering, demo and host-asset builds are checked separately.
 
 ## Automated checks
 
@@ -19,6 +19,8 @@ New checks measure actual rear-content foreground contrast, Clear on white, prot
 
 Documentation checks verify page availability, navigation, generated reference tables and narrow-screen layout. The built package is loaded and rendered separately with `tools/check-package.mjs`. `tools/type-consumer.ts` compiles declarations in NodeNext mode independently of Vite.
 
+The v0.10 control checks cover dense-to-glass thumb pixels, track composition, drag/cancel, single-commit events, keyboard input, RTL, disabled state, accessibility, responsive motion, minification and cleanup. Local-content tests also check same-size streaming and an equal-area dimension change. `npm run check:guides` compiles all 16 TypeScript examples from the four foundation guides against the built declarations.
+
 ## Hardware coverage
 
 The local hardware path is Windows, Edge / ANGLE D3D11 on Intel UHD Graphics (0x9B41). Set `CHROMIUM_PATH` to an installed Chromium-family browser and `LIQUID_GLASS_GPU=1` for hardware tests. CI repeats build and browser checks on Ubuntu/Chromium. The GitHub Actions result is authoritative for each commit.
@@ -28,3 +30,5 @@ Windows WebView2 and Android WebView asset preparation are checked. Native SDK b
 ## Resource-constrained development
 
 Tests run with one worker. `NODE_OPTIONS=--max-old-space-size=192 --max-semi-space-size=2` limits Node heap use where necessary. Run builds, browser tests, benchmarking and recording sequentially. Production preview avoids file watching during recording. Generated documentation and artifact directories are excluded from development watchers.
+
+The v0.10 control regressions verify dense versus refractive switch states, one change per user commit, programmatic updates without synthetic events, capture failure/cancellation, RTL, disabled state, native range semantics, minification, independent content opacity, narrow layouts, dark backgrounds and idle cleanup.

@@ -1,5 +1,7 @@
 # Animation recipes
 
+For an introduction with expected visual behavior, start with [Animation basics](animation-basics.md).
+
 ## Move and retarget
 
 ```ts

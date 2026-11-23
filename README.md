@@ -34,6 +34,12 @@ These images are actual output of the included [gallery](examples/gallery), capt
 
 The [optical study](examples/dispersion) compares clear and scattered transmission. This illustration uses separation 2 for inspection; the default is 0.35.
 
+## Build familiar controls
+
+Start with [Quick start](docs/quick-start.md), [Basic controls](docs/basic-controls.md), [Switches](docs/switches.md) and [Animation basics](docs/animation-basics.md). The switch and slider render their real rails beneath a dense resting thumb that becomes refractive during interaction.
+
+![Interactive switches, slider and basic glass motion](docs/images/controls.jpg)
+
 ## Run the examples
 
 ```sh
@@ -45,6 +51,7 @@ Open `http://127.0.0.1:5173/` for the laboratory and motion studio. Additional r
 
 | Route | Purpose |
 |---|---|
+| `/examples/controls/` | Switches, slider and move/reshape/reveal foundations |
 | `/examples/gallery/` | Interactive paper, typography and chromatic studies |
 | `/examples/dispersion/` | Draggable Clear/Regular/diffuse lenses and wavelength controls |
 | `/examples/readability/` | Rear-content contrast, Clear presets and size/edge response |
@@ -58,7 +65,7 @@ Open `http://127.0.0.1:5173/` for the laboratory and motion studio. Additional r
 Download the `.tgz` from [Releases](https://github.com/golodgolub-bit/liquid-glass-material/releases/latest), then install it:
 
 ```sh
-npm install ./liquid-glass-material-0.9.0.tgz
+npm install ./liquid-glass-material-0.10.0.tgz
 ```
 
 ```ts
@@ -135,3 +142,5 @@ An independent implementation inspired by Apple Liquid Glass. It maps public mat
 [MIT](LICENSE). Gallery artwork is procedurally rendered; its literary excerpt is public domain. Apple, iOS and Liquid Glass are trademarks of Apple Inc. This project is not affiliated with Apple.
 
 See [v0.9](docs/v0.9.md) for fine-detail contrast, spectral scattering and programmable selection lift. The [dispersion guide](docs/dispersion.md) explains complementary edge colors and the two optical models.
+
+[v0.10](docs/v0.10.md) adds redesigned transient control thumbs, independent local-content opacity, minification and practical foundation guides.
