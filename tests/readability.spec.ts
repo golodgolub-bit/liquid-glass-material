@@ -9,6 +9,7 @@ test('readability study responds to rear content, resizing and independent edge 
   await page.waitForFunction(()=>(window as any).glassReadability?.front.state.contrast.source==='composited');
   await expect(page.locator('#rear-result')).toContainText('dark ink');
   await page.getByRole('button',{name:'Switch rear content'}).click();
+  await page.evaluate(()=>(window as any).glassReadability.front.contrastReady());
   await expect(page.locator('#rear-result')).toContainText('light ink');
   await page.getByRole('button',{name:'Expand the surface'}).click();
   await page.waitForFunction(()=>(window as any).glassReadability.panel.rect.width>700);

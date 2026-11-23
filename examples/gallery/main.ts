@@ -17,8 +17,8 @@ function paint(){
     let seed=7;for(let i=0;i<40000;i++){seed=(seed*16807)%2147483647;const x=seed%w;seed=(seed*16807)%2147483647;const y=seed%h;c.fillStyle=i%2?'#7e755207':'#ffffff25';c.fillRect(x,y,1,1);}
     c.fillStyle='#666f65';font(c,13,'Arial');tracked(c,'MATERIAL STUDY / 001',100,94);tracked(c,'LIGHT · TYPE · PAPER',1190,94,2);
     c.strokeStyle='#717c5a45';c.beginPath();c.moveTo(100,122);c.lineTo(1500,122);c.stroke();
-    c.fillStyle='#243d36';font(c,108);c.fillText('Refraction,',100,285);c.fillText('in plain sight.',100,395);
-    c.fillStyle='#939886';font(c,17,'Arial');c.fillText('A transparent material with a life of its own.',104,448);
+    c.fillStyle='#243d36';font(c,108);c.fillText('Glass over',100,285);c.fillText('literature.',100,395);
+    c.fillStyle='#939886';font(c,17,'Arial');c.fillText('Clear material over a page from Pride and Prejudice.',104,448);
     c.fillStyle='#294237';font(c,29);const text=['It is a truth universally acknowledged, that a single man in','possession of a good fortune, must be in want of a wife.','However little known the feelings or views of such a man','may be on his first entering a neighbourhood, this truth','is so well fixed in the minds of the surrounding families,','that he is considered the rightful property of some one','or other of their daughters.'];
     text.forEach((line,i)=>c.fillText(line,102,566+i*43));
     c.fillStyle='#7a816f';font(c,12,'Arial');tracked(c,'JANE AUSTEN — PRIDE AND PREJUDICE, 1813',102,930,1.4);
@@ -26,14 +26,14 @@ function paint(){
   }else if(scene==='spectrum'){
     const g=c.createLinearGradient(0,0,w,h);g.addColorStop(0,'#0f2137');g.addColorStop(.48,'#214753');g.addColorStop(1,'#a6b0a0');c.fillStyle=g;c.fillRect(0,0,w,h);
     for(const [x,y,r,color]of [[1250,250,480,'#ffc47c'],[430,710,600,'#589bab'],[1400,880,480,'#7799e9']]as const){const glow=c.createRadialGradient(x,y,0,x,y,r);glow.addColorStop(0,color+'b0');glow.addColorStop(1,color+'00');c.fillStyle=glow;c.fillRect(0,0,w,h);}
-    c.fillStyle='#e9f1e9';font(c,13,'Arial');tracked(c,'MATERIAL STUDY / 002',100,94);font(c,128);c.fillText('Light has',100,300);c.fillText('a softer side.',100,432);
-    c.fillStyle='#ffffffcc';font(c,18,'Arial');c.fillText('Refraction. Reflection. A continuous response.',106,510);
+    c.fillStyle='#e9f1e9';font(c,13,'Arial');tracked(c,'MATERIAL STUDY / 002',100,94);font(c,128);c.fillText('Chromatic',100,300);c.fillText('transmission.',100,432);
+    c.fillStyle='#ffffffcc';font(c,18,'Arial');c.fillText('An SVG contour over curved linework.',106,510);
     c.strokeStyle='#e9f1e955';c.lineWidth=1;for(let i=0;i<21;i++){c.beginPath();c.moveTo(100,620+i*9);c.bezierCurveTo(500,560+i*13,850,910-i*9,1500,700+i*8);c.stroke();}
     font(c,12,'Arial');c.fillStyle='#e9f1e9';tracked(c,'SPECTRAL INDICES / PROGRAMMABLE OPTICS',100,930,1.5);
   }else{
     const g=c.createLinearGradient(0,0,w,h);g.addColorStop(0,'#e6ebe8');g.addColorStop(1,'#ccd5d1');c.fillStyle=g;c.fillRect(0,0,w,h);
-    c.fillStyle='#4c625a';font(c,13,'Arial');tracked(c,'MATERIAL STUDY / 003',100,94);font(c,112);c.fillText('One material.',100,286);c.fillText('Many possibilities.',100,404);
-    font(c,18,'Arial');c.fillText('Stable identities. Shared contours. Uninterrupted motion.',106,466);
+    c.fillStyle='#4c625a';font(c,13,'Arial');tracked(c,'MATERIAL STUDY / 003',100,94);font(c,112);c.fillText('Layered',100,286);c.fillText('surfaces.',100,404);
+    font(c,18,'Arial');c.fillText('Three surfaces share a compositor and animated geometry.',106,466);
 
     c.strokeStyle='#a1afa7';c.beginPath();c.moveTo(100,850);c.lineTo(1500,850);c.stroke();font(c,12,'Arial');tracked(c,'SHARED CONTAINERS / MATCHED GEOMETRY',100,930,1.5);
   }

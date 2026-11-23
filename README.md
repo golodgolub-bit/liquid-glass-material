@@ -14,7 +14,7 @@ TypeScript · WebGL 2 · Zero runtime dependencies · MIT
 
 A shared GPU compositor for refractive surfaces, layered content and fluid controls. Build for the web, Electron, Windows WebView2 and Android WebView. Configure the material or replace its GLSL and physics entirely.
 
-## More than a blur
+## Capabilities
 
 - **Optics:** independent thickness and refraction reach, glass/outside indices, magnification, Cauchy/Abbe RGB dispersion and Beer–Lambert absorption.
 - **Finish:** Regular, Clear and Identity; composited contrast, tint, size response, scattering, directional light and independent environment reflection. Raised bevel is off by default.

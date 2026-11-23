@@ -88,6 +88,7 @@ test('navigation lens lifts during a real pointer drag and snaps to its selected
   await page.mouse.move(from!.x+from!.width/2,from!.y+from!.height/2);await page.mouse.down();await page.mouse.move(to!.x+to!.width/2,to!.y+to!.height/2,{steps:10});
   await expect.poll(()=>page.evaluate(()=>(window as any).motionStudio.renderer.getState('studio-navigation').rect.height)).toBeGreaterThan(base*1.4);
   await page.mouse.up();await expect(settings).toHaveAttribute('aria-pressed','true');
+  await page.evaluate(()=>(window as any).motionStudio.renderer.whenSettled('studio-navigation'));
   await expect.poll(()=>page.evaluate(()=>(window as any).motionStudio.renderer.getState('studio-navigation').rect.height)).toBeCloseTo(base,0);
 });
 
