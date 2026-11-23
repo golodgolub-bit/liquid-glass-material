@@ -1,6 +1,6 @@
 # Validation
 
-Local v0.8 verification covers **23 unit tests and 57 browser checks** on the hardware path below. NodeNext declarations, built ESM rendering, demo and host-asset builds are checked separately.
+Local v0.8.1 verification covers **23 unit tests and 57 browser checks** on the hardware path below. NodeNext declarations, built ESM rendering, demo and host-asset builds are checked separately.
 
 ## Automated checks
 

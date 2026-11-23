@@ -115,6 +115,7 @@ export class GlassRenderer {
   private contrastSampler!:ContrastSampler<ContrastProbe>;private contrastDirty=true;private contrastUrgent=true;private lastContrastTime=-Infinity;
   private frame = 0; private lastTime = 0;
   private disposed = false; private lost = false;
+  private rendering=false;
   private listeners = new Set<(stats: Readonly<RenderStats>) => void>();
   private cleanup: (() => void)[] = [];
   private sampleCanvas: HTMLCanvasElement;
@@ -406,6 +407,8 @@ export class GlassRenderer {
   }
   removeSurface(id: string): void { this.assertAlive();const s=this.surfaces.get(id);if(s){this.cancelWaiters(s);for(const waiter of s.contrastWaiters)waiter(null);s.contrastWaiters.clear();this.groupMembers.get(s.group)?.delete(s);if(!this.groupMembers.get(s.group)?.size)this.groupMembers.delete(s.group);if(s.contentTexture)this.gl.deleteTexture(s.contentTexture);}this.surfaces.delete(id); this.invalidate(); }
   private surface(id: string): Surface { const s = this.surfaces.get(id); if (!s) throw new Error(`Unknown surface: ${id}`); return s; }
+  /** No active/scheduled frame or pending readability work. Disposed renderers are idle. */
+  get idle():boolean{return this.disposed||!this.rendering&&!this.lost&&!this.frame&&!this.contrastDirty&&!this.contrastSampler?.pending;}
   invalidate(): void {
     this.materialCache.clear();this.baseMaterialCache.clear();this.contrastRevision++;
     this.schedule(true);
@@ -642,6 +645,7 @@ export class GlassRenderer {
   }
   private render = (now: number) => {
     this.frame = 0; if (this.disposed || this.lost) return;
+    this.rendering=true;
     const start = performance.now(), gl = this.gl;
     this.pollContrast();
     const elapsed=this.lastTime?Math.max(0,(now-this.lastTime)/1000):0,dt=this.lastTime?Math.min(elapsed,0.1):1/60;this.lastTime=now;
@@ -649,7 +653,7 @@ export class GlassRenderer {
       if(this.settings.reducedMotion&&!a.essential){a.suspend();continue;}
       try{a.tick(elapsed,this);}catch(error){a.cancel();const e=error instanceof Error?error:new Error(String(error));if(this.options.onError)this.options.onError(e);else console.error(e);}
     }
-    if(this.disposed||this.lost)return;
+    if(this.disposed||this.lost){this.rendering=false;return;}
     if(this.settings.reducedMotion)this.lightAngle.snap();
     let moving = this.lightAngle.step(dt);this.light=[Math.cos(this.lightAngle.value),Math.sin(this.lightAngle.value)];
     for (const s of this.surfaces.values()) {
@@ -729,6 +733,7 @@ export class GlassRenderer {
       for(const s of this.surfaces.values())if(this.springs(s).every(isResting)){for(const resolve of s.waiters)resolve({finished:true});s.waiters.clear();}
       if (moving || this.contrastSampler.pending || this.contrastDirty || [...this.animations].some(a=>a.running&&(!this.settings.reducedMotion||a.essential)) || [...this.surfaces.values()].some(s => this.springs(s).some(spring=>!isResting(spring)))) this.schedule(false);
     } catch (error) { this.options.onError?.(error instanceof Error ? error : new Error(String(error))); if (!this.options.onError) console.error(error); }
+    finally{this.rendering=false;}
   };
   private drawGroup(p: Program, list: Surface[]) {
     const gl = this.gl, first = list[0], m = this.currentMaterial(first);

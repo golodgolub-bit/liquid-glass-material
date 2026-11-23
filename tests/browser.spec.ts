@@ -3,6 +3,7 @@ test('laboratory compiles real shaders, controls the material and sleeps at rest
   const errors: string[] = []; page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/'); await expect(page.locator('#material-canvas')).toHaveAttribute('data-glass-context','ready');
   await expect.poll(()=>page.evaluate(()=> (window as any).glassLab.renderer.stats.frames)).toBeGreaterThan(2);
+  await page.getByRole('button',{name:'Reduced motion',exact:false}).click();
   await page.getByRole('button',{name:'Clear',exact:true}).click();
   await expect(page.locator('#frost-value')).toHaveText('8%');
   await page.getByRole('button',{name:'Test grid',exact:true}).click();
@@ -11,8 +12,7 @@ test('laboratory compiles real shaders, controls the material and sleeps at rest
   await page.getByRole('button',{name:'Open material menu'}).click();
   await expect(page.locator('#material-menu')).toBeVisible(); await page.keyboard.press('Escape');
   await expect(page.locator('#material-menu')).toBeHidden();
-  await page.getByRole('button',{name:'Reduced motion',exact:false}).click();
-  await page.waitForTimeout(300);
+  await expect.poll(()=>page.evaluate(()=>(window as any).glassLab.renderer.idle),{timeout:10000}).toBe(true);
   const a = await page.evaluate(()=> (window as any).glassLab.renderer.stats);
   await page.waitForTimeout(300);
   const b = await page.evaluate(()=> (window as any).glassLab.renderer.stats);

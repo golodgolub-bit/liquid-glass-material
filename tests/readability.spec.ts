@@ -44,8 +44,8 @@ test('Regular protects text over split black/white input and the asynchronous sa
     const ready=await s.contrastReady();await s.settled();await new Promise(r=>setTimeout(r,180));const pixels=await t.capture(),fg=s.foreground.match(/\d+/g)!.map(Number).map((v:number)=>v/255);
     const ratios=[110,200].map(x=>{const i=(120*320+x)*4;return lib.contrastRatio(pixels.slice(i,i+3).map((v:number)=>v/255),fg);});
     await new Promise(r=>setTimeout(r,200));const a=t.renderer.stats;await new Promise(r=>setTimeout(r,250));const b=t.renderer.stats;
-    const gl=t.renderer.canvas.getContext('webgl2');return{ready,ratios,protection:s.state.contrast.protection,idle:b.frames-a.frames,readbacks:b.contrastReadbacks-a.contrastReadbacks,pack:gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING),error:gl.getError()};
-  });expect(result.ratios.every((v:number)=>v>=4.5)).toBe(true);expect(result.protection).toBeGreaterThan(.1);expect(result.ready?.source).toBe('composited');expect(result.idle).toBe(0);expect(result.readbacks).toBe(0);expect(result.pack).toBeNull();expect(result.error).toBe(0);
+    const gl=t.renderer.canvas.getContext('webgl2');return{ready,ratios,protection:s.state.contrast.protection,idle:b.frames-a.frames,sleeping:t.renderer.idle,readbacks:b.contrastReadbacks-a.contrastReadbacks,pack:gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING),error:gl.getError()};
+  });expect(result.ratios.every((v:number)=>v>=4.5)).toBe(true);expect(result.protection).toBeGreaterThan(.1);expect(result.ready?.source).toBe('composited');expect(result.idle).toBe(0);expect(result.sleeping).toBe(true);expect(result.readbacks).toBe(0);expect(result.pack).toBeNull();expect(result.error).toBe(0);
 });
 test('edge illumination remains programmable at bevel zero',async({page})=>{
   await page.goto('/tests/harness.html');const result=await page.evaluate(async()=>{

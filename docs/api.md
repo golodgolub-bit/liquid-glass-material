@@ -24,6 +24,8 @@ Use one `GlassRenderer` per composited scene. Members of the same optical group 
 
 `state.baseMaterial` contains current material springs; `state.material` includes optional geometry-dependent response. Read [Material response](material-response.md) before porting manually scaled effects. `state.contrast` reports completed regional measurements. `contrastReady()` returns a contrast state or `null` when unavailable; see [Composited contrast](readability.md) for latency, ink policies and sampled coverage.
 
+`renderer.idle` is true when no frame is active/scheduled and no readability copy/readback remains pending. Wait for it before measuring idle frames; a fixed timeout or a brief gap between slow frames does not establish that the renderer has stopped. Context loss keeps it false until restoration; disposal makes it true.
+
 The renderer owns a single demand-driven animation loop. `addAnimation()` participates in this scheduler; `pause()` stops decorative motion, `cancel()` unregisters it. Reduced Motion bypasses custom deformation and suspends nonessential programs. It does not remove semantic controls or keyboard interaction.
 
 Custom GLSL uses WebGL 2 / GLSL ES 3.00. Managed uniforms are float, vec2, vec3 or vec4 with the `uGlass_` prefix. `setShader()` compiles all passes before swapping the pipeline; an error leaves the previous program running. Uniform changes reuse the program and invalidate custom scattering as needed.
@@ -518,6 +520,8 @@ export declare class GlassRenderer {
     setContent(id: string, source: BackdropSource | null): void;
     contains(id: string, x: number, y: number): boolean;
     removeSurface(id: string): void;
+    /** No active/scheduled frame or pending readability work. Disposed renderers are idle. */
+    get idle(): boolean;
     invalidate(): void;
     /** Compile before replacing the live program. A failure leaves the previous shader intact. */
     setShader(shader: GlassShader | null): void;

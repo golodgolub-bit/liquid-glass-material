@@ -39,3 +39,5 @@ const effects=new GlassEffectContainer(renderer,{namespace:"typed"});void effect
 import {createContrast,createSizeAdaptation,contrastRatio,resolveMaterialForSize,materials} from "../dist/index.js";
 front.contrast(createContrast({appearance:"auto",region:{x:.2,width:.6}})).sizeAdaptation(createSizeAdaptation({thickness:.4}));
 void front.contrastReady();void front.state.baseMaterial;void contrastRatio([1,1,1],[0,0,0]);void resolveMaterialForSize(materials.clearDimmed,{width:300,height:180});
+
+void renderer.idle;

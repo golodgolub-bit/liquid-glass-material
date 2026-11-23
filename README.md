@@ -53,7 +53,7 @@ Open `http://127.0.0.1:5173/` for the laboratory and motion studio. Additional r
 Download the `.tgz` from [Releases](https://github.com/golodgolub-bit/liquid-glass-material/releases/latest), then install it:
 
 ```sh
-npm install ./liquid-glass-material-0.8.0.tgz
+npm install ./liquid-glass-material-0.8.1.tgz
 ```
 
 ```ts
