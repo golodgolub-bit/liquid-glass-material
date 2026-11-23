@@ -49,7 +49,7 @@ uniform vec4 optics; // thickness, refraction, dispersion, frost
 uniform vec4 finish; // saturation, highlight, shadow, dimming
 uniform vec4 tint;
 uniform vec3 physical; // ior, environment reflection, corner power
-uniform float edgeWidth;uniform float edgeLimit;
+uniform float edgeWidth;uniform float edgeLimit;uniform float bevelStrength;
 uniform sampler2D environmentMap;uniform float hasEnvironment;uniform float environmentRotation;
 uniform vec4 mode; // clear, appearance (-1 auto, 0 light, 1 dark), reduced transparency, contrast
 uniform vec4 touch; // x,y, press, impulse
@@ -124,15 +124,18 @@ void main() {
   vec2 n = grad / max(gradientLength, 0.0001);
   float depth = max(-d, 0.0), bevel = max(min(edgeWidth,edgeLimit),0.001);
   float t=clamp(depth/bevel,0.0,1.0);
-  // A shallow edge rolls into a flat interior. Keep displacement continuous at
-  // the silhouette and bounded by depth so thin controls cannot fold into ridges.
+  // Optical normals bend the transmitted ray. Shading normals are independent:
+  // a lensing boundary must not automatically become a raised, embossed frame.
   float height=1.0-pow(1.0-t,3.0);
   float slope=2.4*(1.0-t)*(1.0-t)*min(gradientLength,1.0)*step(.001,edgeWidth);
-  vec3 normal=normalize(vec3(n*vec2(1.0,-1.0)*slope,1.0));
+  vec3 opticalNormal=normalize(vec3(n*vec2(1.0,-1.0)*slope,1.0));
+  vec3 normal=normalize(vec3(n*vec2(1.0,-1.0)*slope*bevelStrength,1.0));
   vec3 incident=vec3(0.0,0.0,-1.0);
-  vec3 ray=refract(incident,normal,1.0/physical.x);
+  vec3 ray=refract(incident,opticalNormal,1.0/physical.x);
   vec2 displacement=ray.xy/max(-ray.z,0.15)*optics.y*height*1.6*sqrt(optics.x/18.0)*presence;
-  displacement*=min(1.0,depth*.8/max(length(displacement),.0001));
+  // A ray may sample beyond the silhouette. Clamping it to the pixel's distance
+  // from the edge flattened the optics into a narrow visible stripe.
+  displacement*=min(1.0,bevel*.7/max(length(displacement),.0001));
   vec2 texel=pixelRatio/resolution;
   vec2 centerUV=vec2(lensCenter.x/viewportSize.x,1.0-lensCenter.y/viewportSize.y);
   float zoom=1.0+(magnification-1.0)*presence;
@@ -159,8 +162,8 @@ void main() {
   if(useVibrancy>0.5){vec4 foreground=texture(vibrantForeground,refractUV);c=mix(c,mix(foreground.rgb,vibrancyColor.rgb,vibrancyColor.a),foreground.a);}
   float facing=dot(n,normalize(light));
   float f0=pow((physical.x-1.0)/(physical.x+1.0),2.0);
-  float fresnel=(f0+(1.0-f0)*pow(1.0-normal.z,5.0))*step(1.0001,physical.x);
-  vec3 reflected=reflect(incident,normal);
+  float fresnel=(f0+(1.0-f0)*pow(1.0-opticalNormal.z,5.0))*step(1.0001,physical.x);
+  vec3 reflected=reflect(incident,opticalNormal);
   vec2 reflectedUV=clamp(uv+reflected.xy*bevel*3.0*texel,texel,1.0-texel);
   vec3 environment=texture(blurred,reflectedUV).rgb;
   if(hasEnvironment>.5){vec2 e=vec2(fract(atan(reflected.x,reflected.z)/6.28318530718+.5+environmentRotation/6.28318530718),1.0-acos(clamp(reflected.y,-1.0,1.0))/3.14159265359);environment=texture(environmentMap,e).rgb;}
@@ -170,9 +173,9 @@ void main() {
   float keyGlare=pow(max(dot(normal,normalize(key+vec3(0,0,1))),0.0),48.0);
   float fillGlare=pow(max(dot(normal,normalize(fillLight+vec3(0,0,1))),0.0),62.0);
   float rim=exp(-depth*1.65),bezel=1.0-smoothstep(0.65,1.0,t);
-  c+=vec3(1.0,0.985,0.96)*(keyGlare+fillGlare*0.4)*bezel*finish.y*0.03;
-  c+=rim*(0.025+pow(max(facing,0.0),6.0)*0.16)*finish.y;
-  c-=rim*pow(max(-facing,0.0),2.0)*0.12*finish.y;
+  c+=vec3(1.0,0.985,0.96)*(keyGlare+fillGlare*0.4)*bezel*finish.y*0.03*bevelStrength;
+  c+=rim*(0.025*bevelStrength+pow(max(facing,0.0),6.0)*mix(.035,.16,bevelStrength))*finish.y;
+  c-=rim*pow(max(-facing,0.0),2.0)*0.12*finish.y*bevelStrength;
   // A broad response under the finger, without periodic water ripples.
   float glow=exp(-distance(p,touch.xy)/95.0)*touch.z;
   c+=vec3(0.018,0.022,0.028)*glow;

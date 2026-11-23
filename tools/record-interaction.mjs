@@ -17,6 +17,8 @@ try{
   for(const name of ['Edit appearance','Share this moment','Add to collection']){await page.getByRole('menuitem',{name}).hover();await delay(250);}await page.screenshot({path:'artifacts/material-menu.png'});await page.keyboard.press('Escape');await delay(700);
   await select('navigation');const start=await box(page.getByRole('button',{name:'Calls',exact:true})),end=await box(page.getByRole('button',{name:'Settings',exact:true}));
   await page.mouse.move(start.x+start.width/2,start.y+start.height/2);await page.mouse.down();await delay(400);await page.mouse.move(end.x+end.width/2,end.y+end.height/2,{steps:35});await delay(350);await page.screenshot({path:'artifacts/material-navigation-held.png'});await page.mouse.up();await delay(800);
+  await page.goto(new URL('/examples/programmatic/',page.url()).href);await page.getByRole('button',{name:'Запустить движение',exact:true}).click();await delay(1800);await page.getByRole('button',{name:'Приостановить',exact:true}).click();await delay(400);
+  await drag(page.getByRole('button',{name:'Перетащить стеклянную линзу',exact:true}),-120,20);await page.locator('#bevel').fill('1');await delay(300);await page.locator('#bevel').fill('0');await delay(300);await page.screenshot({path:'artifacts/material-programmable.png'});
 }finally{
   const video=page.video();await context.close();if(video)await rename(await video.path(),'artifacts/material-interactions.webm');await browser.close();await writeFile('artifacts/interaction-recording/errors.json',JSON.stringify(errors,null,2));
 }

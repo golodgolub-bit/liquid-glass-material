@@ -19,7 +19,7 @@ const snippet=`import { GlassRenderer, bindElement, bindDrag }\n  from '@liquid-
 $('#code-example').textContent=snippet;
 let toastTimer:ReturnType<typeof setTimeout>;
 const toast=(message:string)=>{$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),2400);};
-for(const[selector,text]of[['#copy-code',snippet],['#copy-install','npm install ./liquid-glass-material-0.5.0.tgz']])$(selector).addEventListener('click',async()=>{try{await navigator.clipboard.writeText(text);toast('Copied to clipboard');}catch{toast('Select and copy the code below');}});
+for(const[selector,text]of[['#copy-code',snippet],['#copy-install','npm install ./liquid-glass-material-0.5.1.tgz']])$(selector).addEventListener('click',async()=>{try{await navigator.clipboard.writeText(text);toast('Copied to clipboard');}catch{toast('Select and copy the code below');}});
 
 const canvas=$<HTMLCanvasElement>('#material-canvas'),stage=$('#stage'),backdrop=document.createElement('canvas');
 const renderer=new GlassRenderer(canvas,{measureGpu:true,onError:error=>{$('.stage-error').hidden=false;$('.stage-error').textContent=error.message;}});
@@ -47,7 +47,7 @@ renderer.subscribe(stats=>{
   samples.push(stats.cpuMs);if(samples.length>48)samples.shift();if(++chartCounter%4===0||samples.length<4)$('#frame-chart').innerHTML=samples.map(n=>`<i style="height:${Math.max(3,Math.min(44,n*10))}px"></i>`).join('');
 });
 function allMaterials(){lens.material(current);menu.material(current);bindings.forEach(b=>b.surface.material(current));}
-const opticalKeys=['refraction','thickness','edgeWidth','frost','dispersion','highlight','reflection','ior','cornerPower']as const;
+const opticalKeys=['refraction','thickness','edgeWidth','bevel','frost','dispersion','highlight','reflection','ior','cornerPower']as const;
 function syncControls(){for(const key of opticalKeys){const input=$<HTMLInputElement>(`#${key}`),value=key==='frost'?Math.round(current[key]*100):current[key];input.value=String(value);$(`#${key}-value`).textContent=`${value}${input.dataset.unit}`;input.style.setProperty('--progress',`${(+input.value-+input.min)/(+input.max-+input.min)*100}%`);}}
 function setVariant(next:'regular'|'clear'){current=createMaterial({...materials[next],dimming:next==='clear'?.18:0});allMaterials();syncControls();$('#variant-note').innerHTML=next==='regular'?'Adaptive, softly scattered.<br>Made for controls and navigation.':'Clear, with localized dimming.<br>Made for rich media backgrounds.';document.querySelectorAll<HTMLElement>('[data-variant]').forEach(el=>{const active=el.dataset.variant===next;el.classList.toggle('selected',active);el.setAttribute('aria-pressed',String(active));});}
 for(const key of opticalKeys)$<HTMLInputElement>(`#${key}`).addEventListener('input',event=>{const input=event.target as HTMLInputElement;current=createMaterial({...current,[key]:+input.value/(key==='frost'?100:1)});allMaterials();syncControls();});

@@ -1,12 +1,17 @@
 {
   "name": "@liquid-glass/material",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Portable GPU glass material, spring motion and DOM bindings for WebGL 2 applications",
   "type": "module",
   "license": "MIT",
-  "repository": {"type":"git","url":"git+https://github.com/golodgolub-bit/liquid-glass-material.git"},
-  "homepage":"https://github.com/golodgolub-bit/liquid-glass-material#readme",
-  "bugs":{"url":"https://github.com/golodgolub-bit/liquid-glass-material/issues"},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/golodgolub-bit/liquid-glass-material.git"
+  },
+  "homepage": "https://github.com/golodgolub-bit/liquid-glass-material#readme",
+  "bugs": {
+    "url": "https://github.com/golodgolub-bit/liquid-glass-material/issues"
+  },
   "sideEffects": [
     "**/*.css"
   ],

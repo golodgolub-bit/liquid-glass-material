@@ -58,7 +58,7 @@ interface Surface {
   vibrancy:boolean;
   layer:number;shape:GlassShape|null;shapeFrom:GlassShape|null;shapeMix:Spring;content:BackdropSource|null;contentTexture?:WebGLTexture;contentDirty:boolean;contentBytes:number;
 }
-const materialKeys = ['thickness','edgeWidth','refraction','magnification','dispersion','ior','reflection','cornerPower','frost','tintOpacity','saturation','highlight','shadow','dimming'] as const;
+const materialKeys = ['thickness','edgeWidth','bevel','refraction','magnification','dispersion','ior','reflection','cornerPower','frost','tintOpacity','saturation','highlight','shadow','dimming'] as const;
 interface Program { handle: WebGLProgram; uniforms: Map<string, WebGLUniformLocation | null> }
 interface Target { texture: WebGLTexture; framebuffer: WebGLFramebuffer }
 interface TimerExtension { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }
@@ -621,7 +621,7 @@ export class GlassRenderer {
     gl.uniform2f(this.uniform(p,'lensCenter'),(minX+maxX)/2,(minY+maxY)/2);gl.uniform1f(this.uniform(p,'magnification'),m.magnification);gl.uniform1f(this.uniform(p,'useVibrancy'),first.vibrancy&&this.vibrantSource?1:0);
     gl.uniform4f(this.uniform(p,'optics'),m.thickness,m.refraction,this.quality==='low'?0:m.dispersion,m.frost);
     gl.uniform3f(this.uniform(p,'physical'),m.ior,m.reflection,m.cornerPower);
-    gl.uniform1f(this.uniform(p,'edgeWidth'),m.edgeWidth);gl.uniform1f(this.uniform(p,'edgeLimit'),Math.min(...list.map(s=>Math.min(s.motion.width.value,s.motion.height.value)*.225)));
+    gl.uniform1f(this.uniform(p,'edgeWidth'),m.edgeWidth);gl.uniform1f(this.uniform(p,'bevelStrength'),m.bevel);gl.uniform1f(this.uniform(p,'edgeLimit'),Math.min(...list.map(s=>Math.min(s.motion.width.value,s.motion.height.value)*.225)));
     gl.uniform4f(this.uniform(p,'finish'),m.saturation,m.highlight,m.shadow*(0.7+first.detail*0.6),m.dimming);
     gl.uniform4f(this.uniform(p,'tint'),...m.tint,m.tintOpacity);
     gl.uniform4f(this.uniform(p,'mode'),first.variantMix.value,first.tone.value,+this.settings.reducedTransparency,+this.settings.increasedContrast);

@@ -5,7 +5,7 @@
 ## Начать за пять минут
 
 ```sh
-npm install ./liquid-glass-material-0.5.0.tgz
+npm install ./liquid-glass-material-0.5.1.tgz
 ```
 
 ```html

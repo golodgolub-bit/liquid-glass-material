@@ -2,6 +2,8 @@
 
 [Исходники](https://github.com/golodgolub-bit/liquid-glass-material) · [Сборки](https://github.com/golodgolub-bit/liquid-glass-material/releases) · MIT
 
+**v0.5.1:** выпуклая фаска выключена по умолчанию (`bevel:0`), оптическое преломление работает независимо. [Изменения и проверка](docs/v0.5.1.md).
+
 Переносимый GPU-материал и небольшая библиотека контролов, вдохновлённые Apple Liquid Glass. TypeScript, WebGL 2, без зависимостей во время выполнения. Работает в веб-приложениях и интерфейсах внутри Electron, WebView2 и Android WebView.
 
 **Это независимая реализация, а не исходный материал Apple.** Точное совпадение с закрытыми шейдерами, системным композитором и всеми версиями iOS не установлено. Windows и Android подключаются через WebView; нативных Compose/WinUI-рендереров в этой версии нет.
@@ -48,7 +50,7 @@ npm pack               # локальный пакет для установки
 После `npm pack` установите полученный архив в свой проект:
 
 ```sh
-npm install /path/to/liquid-glass-material-0.5.0.tgz
+npm install /path/to/liquid-glass-material-0.5.1.tgz
 ```
 
 ```ts

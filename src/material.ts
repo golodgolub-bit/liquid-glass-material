@@ -8,8 +8,10 @@ export interface GlassMaterial {
   appearance: Appearance;
   /** Optical path depth in CSS pixels. Independent from the edge roll width. */
   thickness: number;
-  /** Width of the edge roll in CSS pixels. The interior remains flat. */
+  /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
   edgeWidth:number;
+  /** Optional raised edge shading, [0,1]. Disabled by default. */
+  bevel:number;
   refraction: number;
   /** Interior lens magnification, independent from the curved edge. */
   magnification: number;
@@ -30,7 +32,7 @@ export interface GlassMaterial {
   dimming: number;
 }
 const base: GlassMaterial = {
-  variant: 'regular', appearance: 'auto', thickness: 18, edgeWidth:4, refraction: 13, magnification:1,
+  variant: 'regular', appearance: 'auto', thickness: 18, edgeWidth:12, bevel:0, refraction: 13, magnification:1,
   dispersion: 0.35, ior:1.48,reflection:.38,cornerPower:2.6,frost: 0.68, tint: Object.freeze([1, 1, 1]) as RGB, tintOpacity: 0,
   saturation: 1.12, highlight: 0.5, shadow: 0.065, dimming: 0,
 };
@@ -47,7 +49,7 @@ export function createMaterial(options: Partial<GlassMaterial> = {}): Readonly<G
   const m = { ...preset, ...options };
   if (!['regular', 'clear', 'identity'].includes(m.variant)) throw new TypeError('Unknown material variant');
   if (!['auto', 'light', 'dark'].includes(m.appearance)) throw new TypeError('Unknown appearance');
-  for (const key of ['frost', 'tintOpacity', 'shadow', 'dimming'] as const) range(m[key], 0, 1, key);
+  for (const key of ['frost', 'tintOpacity', 'shadow', 'dimming','bevel'] as const) range(m[key], 0, 1, key);
   for (const key of ['thickness', 'refraction'] as const) range(m[key], 0, 100, key);
   range(m.edgeWidth,0,32,'edgeWidth');
   range(m.dispersion, 0, 5, 'dispersion'); range(m.saturation, 0, 3, 'saturation'); range(m.highlight, 0, 2, 'highlight');

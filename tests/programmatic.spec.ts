@@ -42,5 +42,20 @@ test('thin glass keeps a flat interior instead of a bright medial ridge',async({
 test('the documented programmatic example runs real controls and respects pause',async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/examples/programmatic/');await page.getByRole('button',{name:'Запустить движение'}).click();await expect(page.getByRole('button',{name:'Приостановить'})).toHaveAttribute('aria-pressed','true');
   await expect.poll(()=>page.evaluate(()=>(window as any).programmaticGlass.animation.elapsed)).toBeGreaterThan(.1);await page.getByRole('button',{name:'Приостановить'}).click();
-  await page.locator('#edge').fill('2');expect(await page.evaluate(()=>(window as any).programmaticGlass.lens.state.material.edgeWidth)).toBe(2);await page.getByRole('button',{name:'Карта окружения: вкл'}).click();await expect(page.getByRole('button',{name:'Карта окружения: выкл'})).toHaveAttribute('aria-pressed','false');expect(errors).toEqual([]);
+  await page.locator('#edge').fill('2');expect(await page.evaluate(()=>(window as any).programmaticGlass.lens.state.material.edgeWidth)).toBe(2);expect(await page.locator('#bevel').inputValue()).toBe('0');await page.getByRole('button',{name:'Карта окружения: выкл'}).click();await expect(page.getByRole('button',{name:'Карта окружения: вкл'})).toHaveAttribute('aria-pressed','true');expect(errors).toEqual([]);
+});
+
+test('unembossed glass still bends rays and a raised bevel remains independently programmable',async({page})=>{
+  await page.goto('/tests/harness.html');
+  const result=await page.evaluate(async()=>{
+    const t=(window as any).testGlass,c=t.source.getContext('2d');c.fillStyle='rgb(120,130,140)';c.fillRect(0,0,320,240);t.renderer.updateBackdrop();
+    t.surface.material({variant:'clear',frost:0,saturation:1,highlight:2,shadow:0,reflection:0},false);const flat=await t.capture();let uniform=0;
+    for(let y=76;y<164;y++)for(let x=116;x<204;x++){const i=(y*320+x)*4;uniform=Math.max(uniform,Math.abs(flat[i]-120),Math.abs(flat[i+1]-130),Math.abs(flat[i+2]-140));}
+    const defaultBevel=t.surface.state.material.bevel;
+    for(let y=0;y<240;y++){c.fillStyle=y%12<6?'white':'black';c.fillRect(0,y,320,1);}t.renderer.updateBackdrop();t.surface.material({highlight:0,refraction:40},false);const bent=await t.capture();t.surface.material({refraction:0},false);const straight=await t.capture();let changed=0;
+    for(let y=71;y<88;y++)for(let x=116;x<204;x++){const i=(y*320+x)*4;if(Math.abs(bent[i]-straight[i])>40)changed++;}
+    t.surface.material({refraction:40,bevel:1,highlight:2},false);const raised=await t.capture();let bevelDifference=0;for(let i=0;i<raised.length;i+=4)bevelDifference+=Math.abs(raised[i]-bent[i]);
+    return{uniform,defaultBevel,changed,bevelDifference};
+  });
+  expect(result.defaultBevel).toBe(0);expect(result.uniform).toBeLessThanOrEqual(2);expect(result.changed).toBeGreaterThan(100);expect(result.bevelDifference).toBeGreaterThan(500);
 });
