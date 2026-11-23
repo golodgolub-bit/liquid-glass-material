@@ -1,6 +1,9 @@
 export type RGB = readonly [number, number, number];
 export type Quality = 'low' | 'balanced' | 'high';
 export type Appearance = 'auto' | 'light' | 'dark';
+const limits=(min:number,max:number)=>Object.freeze([min,max]as const);
+/** Numeric bounds used for input validation and projecting oscillating springs onto valid optics. */
+export const materialRanges=Object.freeze({thickness:limits(0,100),edgeWidth:limits(0,32),bevel:limits(0,1),edgeContrast:limits(0,1),refraction:limits(0,100),magnification:limits(1,2),dispersion:limits(0,5),ior:limits(1,2.5),reflection:limits(0,1),cornerPower:limits(2,4),frost:limits(0,1),tintOpacity:limits(0,1),saturation:limits(0,3),highlight:limits(0,2),shadow:limits(0,1),dimming:limits(0,1)});
 
 /** All spatial parameters use CSS pixels; colors use sRGB in [0, 1]. */
 export interface GlassMaterial {
@@ -12,6 +15,8 @@ export interface GlassMaterial {
   edgeWidth:number;
   /** Optional raised edge shading, [0,1]. Disabled by default. */
   bevel:number;
+  /** Narrow contrast contour, independent from decorative bevel. */
+  edgeContrast:number;
   refraction: number;
   /** Interior lens magnification, independent from the curved edge. */
   magnification: number;
@@ -32,7 +37,7 @@ export interface GlassMaterial {
   dimming: number;
 }
 const base: GlassMaterial = {
-  variant: 'regular', appearance: 'auto', thickness: 18, edgeWidth:12, bevel:0, refraction: 13, magnification:1,
+  variant: 'regular', appearance: 'auto', thickness: 18, edgeWidth:12, bevel:0, edgeContrast:.18, refraction: 13, magnification:1,
   dispersion: 0.35, ior:1.48,reflection:.38,cornerPower:2.6,frost: 0.68, tint: Object.freeze([1, 1, 1]) as RGB, tintOpacity: 0,
   saturation: 1.12, highlight: 0.5, shadow: 0.065, dimming: 0,
 };
@@ -49,11 +54,7 @@ export function createMaterial(options: Partial<GlassMaterial> = {}): Readonly<G
   const m = { ...preset, ...options };
   if (!['regular', 'clear', 'identity'].includes(m.variant)) throw new TypeError('Unknown material variant');
   if (!['auto', 'light', 'dark'].includes(m.appearance)) throw new TypeError('Unknown appearance');
-  for (const key of ['frost', 'tintOpacity', 'shadow', 'dimming','bevel'] as const) range(m[key], 0, 1, key);
-  for (const key of ['thickness', 'refraction'] as const) range(m[key], 0, 100, key);
-  range(m.edgeWidth,0,32,'edgeWidth');
-  range(m.dispersion, 0, 5, 'dispersion'); range(m.saturation, 0, 3, 'saturation'); range(m.highlight, 0, 2, 'highlight');
-  range(m.magnification,1,2,'magnification');range(m.ior,1,2.5,'ior');range(m.reflection,0,1,'reflection');range(m.cornerPower,2,4,'cornerPower');
+  for(const key of Object.keys(materialRanges)as(keyof typeof materialRanges)[])range(m[key],...materialRanges[key],key);
   if (m.tint.length !== 3) throw new TypeError('tint must contain three components');
   m.tint.forEach(n => range(n, 0, 1, 'tint'));
   return Object.freeze({ ...m, tint: Object.freeze([...m.tint]) as RGB });

@@ -1,7 +1,7 @@
 import{test,expect}from'@playwright/test';
 test('documentation pages link to the complete API and a runnable text/reflection example',async({page})=>{
   await page.goto('/docs/');await expect(page.getByRole('heading',{name:'Liquid Glass Material — руководство',exact:true})).toBeVisible();
-  for(const name of['api','text-under-glass','animations','reflections','integration','architecture','troubleshooting']){
+  for(const name of['api','programmability','ray-optics','apple-audit','text-under-glass','animations','reflections','integration','architecture','troubleshooting']){
     const response=await page.request.get(`/docs/${name}.html`);expect(response.ok()).toBe(true);expect(await response.text()).not.toContain('href="undefined"');
   }
   await page.goto('/docs/api.html');await expect(page.getByRole('heading',{name:'GlassMaterial',exact:true})).toBeVisible();

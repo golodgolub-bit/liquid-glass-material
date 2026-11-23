@@ -8,7 +8,7 @@ export class Spring {
   snap(value = this.target): void { this.value = this.target = value; this.velocity = 0; }
   step(seconds: number): boolean {
     if (!Number.isFinite(seconds) || seconds < 0) throw new RangeError('Invalid spring timestep');
-    const w = this.frequency * Math.PI * 2, z = this.damping, x = this.value - this.target, v = this.velocity, t = Math.min(seconds, 1);
+    const w = this.frequency * Math.PI * 2, z = this.damping, x = this.value - this.target, v = this.velocity, t = seconds;
     if (z < 1) {
       const wd = w * Math.sqrt(1 - z * z), e = Math.exp(-z * w * t), c = Math.cos(wd * t), s = Math.sin(wd * t), b = (v + z * w * x) / wd;
       this.value = this.target + e * (x * c + b * s);

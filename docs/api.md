@@ -18,6 +18,8 @@ const renderer = new GlassRenderer(canvas: HTMLCanvasElement, options?: Renderer
 | `measureGpu` | `false` | Асинхронный GPU timer при наличии расширения |
 | `accessibility` | Системные media queries | Частичный `Accessibility` |
 | `onError` | `console.error` | `(error: Error) => void` |
+| `physics` | `defaultPhysics` | Частичные defaults физики для новых поверхностей |
+| `shader` | Стандартный | `GlassShader`, созданный createGlassShader |
 
 | Метод | Результат / действие |
 |---|---|
@@ -31,6 +33,11 @@ const renderer = new GlassRenderer(canvas: HTMLCanvasElement, options?: Renderer
 | `updateReflection()` | Перезагружает изменённый canvas/video окружения |
 | `setReflectionRotation(radians)` | Поворачивает карту по долготе без upload |
 | `setLight(x, y, animate = true)` | Ненулевое конечное направление в плоскости canvas; внутри нормализуется |
+| `configureLightMotion(springOptions)` | Пружина направления света |
+| `setShader(shaderOrNull)` | Транзакционная компиляция glass, blur и backdrop; null возвращает стандартные проходы |
+| `getShader()` | Immutable descriptor активной программы, defaults uniforms |
+| `setShaderUniform(name,value)` | Меняет общий float/vec2/vec3/vec4 без компиляции; custom blur инвалидирует его кэш |
+| `getShaderUniform(name)` | Последнее значение либо undefined |
 | `addSurface(options)` | Новый `SurfaceHandle`, id должен быть уникальным |
 | `addAnimation(callback, options?)` | Управляемая программа `GlassAnimation`, до интеграции пружин и draw |
 | `setAccessibility(partial)` | Переопределяет только переданные настройки; `undefined` возвращает системную настройку |
@@ -67,6 +74,8 @@ type Rect = { x: number; y: number; width: number; height: number; radius: numbe
 | `vibrancy` | `false` или от группы | Включает чтение общей маски текста/символов |
 | `shape` | Округлённый rect | `GlassShape`, созданный `createGlassShape` |
 | `content` | Нет | Локальный RGBA-источник, который рисуется поверх материала и виден передним слоям |
+| `physics` | Defaults renderer | Частичный PhysicsOptions, все восемь каналов и деформация |
+| `deform` | Стандартная | Чистая DeformationFunction |
 
 Члены группы обязаны иметь одинаковые материал, spacing, layer и vibrancy. Изменение материала одного члена меняет всю группу. Разные группы не сливаются геометрически; передняя преломляет уже отрисованную заднюю. При равных layer сохраняется порядок добавления групп.
 
@@ -76,6 +85,9 @@ type Rect = { x: number; y: number; width: number; height: number; radius: numbe
 |---|---|
 | `move(partialRect, animate = true)` | `this`; задаёт цели геометрии; false синхронно устанавливает значения |
 | `motion(springOptions)` | `this`; меняет параметры геометрических пружин без смены цели |
+| `configurePhysics(partial)` | `this`; меняет каналы и параметры, сохраняя состояние |
+| `deform(functionOrNull)` | `this`; чистая функция возвращает визуальный Rect; null восстанавливает стандартную |
+| `kick(partialVelocity)` | `this`; добавляет скорость CSS px/s к геометрии, игнорируется при Reduced Motion |
 | `animateTo(partialRect, motionOptions?)` | `Promise<MotionResult>` |
 | `material(partialMaterial, animate = true)` | `this`; плавно меняет параметры всей группы |
 | `shape(shapeOrNull, motionOptions?)` | `Promise<MotionResult>`; null возвращает rounded rect |
@@ -91,12 +103,29 @@ type Rect = { x: number; y: number; width: number; height: number; radius: numbe
 
 ```ts
 interface SurfaceState {
-  rect: Rect; visualRect: Rect; visibility: number; pressed: number;
+  rect: Rect; visualRect: Rect; velocity: Rect; visibility: number; pressed: number;
   energy: number; moving: boolean; material: Readonly<GlassMaterial>;
 }
 ```
 
 `visualRect` учитывает проявление, упругость и касание; hit targets должны следовать ему. `bindElement` делает это автоматически. Исходный `rect` не является конечной целью анимации. Методы удалённой поверхности выбрасывают ошибку. Прерывание move/material/shape/show/hide разрешает прежние ожидания с `{finished:false}`; это не исключение. `settled()` не ожидает окончания независимой бесконечной программы renderer.
+
+`physics` — immutable конфигурация поверхности. Полные типы и defaults: [Программирование](programmability.md). Там же описаны GlassShaderOptions, GLSL hooks, стандартный uniform ABI, полная замена fragment/blur/backdrop и восстановление программ. Параметры геометрии отображаются в velocity; остальные числовые каналы не являются полями Rect.
+
+## Открытые оптические и физические функции
+
+| Экспорт | Назначение |
+|---|---|
+| `createPhysics(options?,base?) / defaultPhysics` | Проверка, копирование и defaults восьми каналов |
+| `springFromPhysical({mass,stiffness,damping})` | Частота и damping ratio физической пружины |
+| `springToPhysical({frequency,damping},mass=1)` | Обратное преобразование |
+| `createGlassShader(options?) / shaderSources` | Сборка immutable shader descriptor и открытый GLSL исходник проходов |
+| `sampleGlassOptics(probe)` | CPU-reference стандартной экранной оптики |
+| `refractRay(incident,normal,eta)` | Нормализованный луч либо null при TIR |
+| `fresnelReflectance(cosIncident,n1,n2)` | Точный неполяризованный Fresnel на границе |
+| `traceSlabRay(options) / slabOpticsGLSL` | CPU/GPU путь через две границы; см. [расчёт лучей](ray-optics.md) |
+
+Типы: GlassPhysics, PhysicsOptions, PhysicsChannel, DeformationState, DeformationFunction, PhysicalSpring, GlassShader, GlassShaderOptions, ShaderUniform, ShaderValue, Vec2, Vec3, SlabRay, SlabRayOptions, OpticalProbe. Длины/координаты и границы применения приведены в отдельных руководствах; slab tracer не объявлен закрытой реализацией Apple.
 
 ## GlassMaterial
 
@@ -109,6 +138,7 @@ interface SurfaceState {
 | `thickness` | `18` | 0…100 px, оптическая глубина; не ширина выпуклости |
 | `edgeWidth` | `12` | 0…32 px, область оптического преломления; автоматически ограничена размером поверхности |
 | `bevel` | `0` | 0…1, декоративная выпуклая фаска; по умолчанию выключена, независимо от преломления |
+| `edgeContrast` | `.18` | 0…1, узкий затемнённый контур, независимый от фаски |
 | `refraction` | `13` | 0…100 px, сила краевого преломления |
 | `magnification` | `1` | 1…2, увеличение середины; 1 сохраняет масштаб |
 | `dispersion` | `.35` | 0…5, спектральное разделение; в low отключено |
@@ -164,7 +194,7 @@ const shape = createGlassShape({
 |---|---|
 | `bindElement(renderer, element, options)` | options — SurfaceOptions без rect, плюс radius; обязательный id. Возвращает `{surface,refresh(animate=false),dispose}` |
 | `observeSize(renderer)` | Следит за размером canvas; возвращает функцию остановки |
-| `bindDrag(renderer, element, {surface,bounds?,onStart?,onEnd?})` | bounds — функция, возвращающая Rect; результат `{dragging,dispose}`. Проверяет реальный контур, поддерживает window routing при отказе pointer capture |
+| `bindDrag(renderer, element, {surface,bounds?,onStart?,onEnd?,followSpring?,releaseSpring?})` | bounds — функция, возвращающая Rect; результат `{dragging,dispose}`. Проверяет реальный контур, поддерживает window routing при отказе pointer capture. Пружина отпускания по умолчанию восстанавливает настройку поверхности |
 | `bindLiquidSelection(renderer, rail, {id,items,initialIndex=0,vibrancy=true,material?,onSelect?})` | `{surface,selectedIndex,select(index,animate=true),refresh,dispose}`; горизонтальный lift/drag/snap, клавиши Left/Right/Home/End |
 | `bindLiquidHighlight(renderer, container, {id,items,layer=1,material?})` | `{surface,select(index),refresh,dispose}`; -1 скрывает; hover, focus, held drag для menu rows |
 

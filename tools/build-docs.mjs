@@ -3,7 +3,7 @@ import{resolve,posix}from'node:path';
 import{Marked}from'marked';
 const root=resolve('docs'),out=resolve('public/docs');await mkdir(out,{recursive:true});
 const names=(await readdir(root)).filter(n=>n.endsWith('.md'));
-const order=['index.md','api.md','text-under-glass.md','animations.md','reflections.md','integration.md','architecture.md','performance.md','troubleshooting.md','v0.5.1.md','v0.5.md','research.md'];
+const order=['index.md','api.md','programmability.md','ray-optics.md','apple-audit.md','text-under-glass.md','animations.md','reflections.md','integration.md','architecture.md','performance.md','troubleshooting.md','v0.6.md','v0.5.1.md','v0.5.md','research.md'];
 names.sort((a,b)=>(order.indexOf(a)<0?100:order.indexOf(a))-(order.indexOf(b)<0?100:order.indexOf(b))||a.localeCompare(b));
 const pages=await Promise.all(names.map(async file=>{const source=await readFile(resolve(root,file),'utf8');return{file,source,title:source.match(/^# (.+)$/m)?.[1]??file,href:file.replace(/\.md$/,'.html')};}));
 const escape=s=>s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');

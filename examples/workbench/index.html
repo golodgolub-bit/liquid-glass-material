@@ -1,0 +1,19 @@
+<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Материал и физика · Liquid Glass</title><link rel="stylesheet" href="./style.css"></head><body><main>
+<header><a href="../../docs/">liquid glass / документация</a><span>DEVELOPER WORKBENCH</span></header>
+<h1>Материал под вашим управлением.</h1><p class="intro">Оптическая функция, рассеивание и движение открыты для программирования. Меняйте физику, заменяйте GLSL, проверяйте результат на линиях и тексте. Это стенд независимой модели, а не доказательство совпадения с Apple.</p>
+<div class="workspace"><aside>
+<fieldset><legend>Оптика</legend><label>Модель<select id="model" aria-label="Модель"><option value="screen">Экранная линза</option><option value="slab">Луч через две границы</option><option value="custom">Своя GLSL-функция</option></select></label>
+<label>Показатель преломления <output id="ior-value">1.48</output><input id="ior" aria-label="Показатель преломления" type="range" min="1" max="2.5" step="0.01" value="1.48"></label>
+<label>Сила искажения <output id="gain-value">1.00</output><input id="gain" aria-label="Сила искажения" type="range" min="0" max="2" step="0.05" value="1"></label>
+<label>Расстояние до фона <output id="gap-value">4</output><input id="gap" aria-label="Расстояние до фона" type="range" min="0" max="24" step="1" value="4"></label></fieldset>
+<fieldset><legend>Пружина движения</legend>
+<label>Масса <output id="mass-value">1.0</output><input id="mass" aria-label="Масса" type="range" min="0.2" max="4" step="0.1" value="1"></label>
+<label>Жёсткость <output id="stiffness-value">480</output><input id="stiffness" aria-label="Жёсткость" type="range" min="40" max="1200" step="10" value="480"></label>
+<label>Затухание <output id="damping-value">39</output><input id="damping" aria-label="Затухание" type="range" min="2" max="100" step="1" value="39"></label>
+<label class="check"><input type="checkbox" id="deform">Своя функция деформации</label>
+<div class="actions"><button id="kick">Приложить импульс</button><button id="play" aria-pressed="false">Движение</button></div></fieldset>
+<p class="hint">Зажмите линзу и перемещайте её. Во время захвата действует быстрая пружина, после отпускания возвращается ваша настройка.</p>
+</aside><section class="preview"><div class="stage"><canvas aria-hidden="true"></canvas><button class="lens" aria-label="Перетащить линзу"></button><span class="caption">DRAG · REFRACT · REPROGRAM</span></div><output id="stats"></output><p class="mode-note" id="mode-note">Экранная оптическая модель. Выпуклая фаска выключена.</p>
+<details><summary>Редактор оптической функции · GLSL</summary><p>Доступны <code>data</code>, <code>defaultGlassOptics</code>, <code>traceSlab</code> и uniforms <code>uGlass_gain / uGlass_gap</code>. Изменение uniforms не перекомпилирует программу.</p><textarea id="code" aria-label="GLSL оптической функции" spellcheck="false"></textarea><div class="actions"><button id="apply">Применить GLSL</button><button id="reset">Восстановить стандартный шейдер</button></div></details>
+<output id="status" role="status">Готово. Шейдер компилируется только при смене кода.</output></section></div>
+<footer><a href="../../docs/programmability.html">API шейдеров и физики →</a><a href="../../docs/apple-audit.html">Что подтверждено сравнением с Apple →</a></footer></main><script type="module" src="./main.ts"></script></body></html>
