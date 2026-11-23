@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Glass host example</title><link rel="stylesheet" href="./style.css"><style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;font:16px system-ui;color:#243248}canvas{position:absolute;width:100%;height:100%;inset:0}#controls{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:16px}button{background:transparent;padding:18px 30px;border:0;border-radius:30px;font:inherit;cursor:pointer}header{position:absolute;left:24px;top:20px;right:24px;display:flex;justify-content:space-between;font-size:13px}#status{position:absolute;bottom:24px;left:24px;font-size:12px;opacity:.6}
+</style></head><body><canvas id="glass"></canvas><header><span>Liquid Glass · portable material</span><span id="platform">Web host</span></header><div id="controls"><button id="regular">Regular</button><button id="clear">Clear</button></div><div id="status" role="status">Press a glass control</div><script type="module">
+import {GlassRenderer,bindElement} from './liquid-glass.js';
+const canvas=document.querySelector('canvas'), source=document.createElement('canvas');
+const renderer=new GlassRenderer(canvas,{onError:e=>document.querySelector('#status').textContent=e.message});
+const regular=bindElement(renderer,document.querySelector('#regular'),{id:'regular',material:{variant:'regular'}});
+const clear=bindElement(renderer,document.querySelector('#clear'),{id:'clear',material:{variant:'clear',dimming:.2}});
+function resize(){
+  renderer.resize(innerWidth,innerHeight); source.width=Math.min(1600,innerWidth);source.height=Math.min(1000,innerHeight);
+  const c=source.getContext('2d'),g=c.createLinearGradient(0,0,source.width,source.height);
+  g.addColorStop(0,'#9fc8e4');g.addColorStop(.5,'#f8d8c0');g.addColorStop(1,'#756eac');c.fillStyle=g;c.fillRect(0,0,source.width,source.height);
+  c.fillStyle='#344561';c.font='48px Georgia';c.fillText('A portable material.',source.width*.1,source.height*.35);
+  for(let i=0;i<25;i++){c.fillStyle=i%2?'#ffffff30':'#1b306012';c.fillRect(i*60,source.height*.5,20,source.height*.5);}
+  renderer.setBackdrop(source);regular.refresh();clear.refresh();
+}window.addEventListener('resize',resize);resize();
+function send(action){
+  const message={type:'glass-action',action};document.querySelector('#status').textContent=`Selected: ${action}`;
+  if(window.chrome?.webview)window.chrome.webview.postMessage(message);
+  else if(window.GlassNative)window.GlassNative.postMessage(JSON.stringify(message));
+}
+document.querySelector('#regular').onclick=()=>send('regular');document.querySelector('#clear').onclick=()=>send('clear');
+window.glassHost={setAccessibility:settings=>renderer.setAccessibility(settings),setPlatform:name=>document.querySelector('#platform').textContent=name,dispose:()=>{window.removeEventListener('resize',resize);regular.dispose();clear.dispose();renderer.dispose();}};
+</script></body></html>

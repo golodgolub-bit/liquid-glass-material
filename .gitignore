@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-demo/
+examples/windows/WebAssets/
+examples/android/app/src/main/assets/
+examples/android/.gradle/
+**/bin/
+**/obj/
+*.tgz
+playwright-report/
+test-results/
+artifacts/reference-frames/
+*.local
+public/docs/
+artifacts/

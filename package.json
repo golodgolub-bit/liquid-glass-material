@@ -1,0 +1,49 @@
+{
+  "name": "@liquid-glass/material",
+  "version": "0.5.0",
+  "description": "Portable GPU glass material, spring motion and DOM bindings for WebGL 2 applications",
+  "type": "module",
+  "license": "MIT",
+  "repository": {"type":"git","url":"git+https://github.com/golodgolub-bit/liquid-glass-material.git"},
+  "homepage":"https://github.com/golodgolub-bit/liquid-glass-material#readme",
+  "bugs":{"url":"https://github.com/golodgolub-bit/liquid-glass-material/issues"},
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "main": "./dist/liquid-glass.js",
+  "module": "./dist/liquid-glass.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/liquid-glass.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "docs"
+  ],
+  "scripts": {
+    "dev": "npm run build:docs && vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build && tsc -p tsconfig.lib.json",
+    "build:docs": "node tools/build-docs.mjs",
+    "build:demo": "npm run build:docs && vite build --mode demo",
+    "build:hosts": "npm run build && node tools/build-hosts.mjs",
+    "benchmark": "node tools/benchmark.mjs",
+    "benchmark:hardware": "node tools/benchmark.mjs --d3d11",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "check": "npm run build && npm test && npm run test:browser"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.10.1",
+    "marked": "^18.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2",
+    "vitest": "^4.0.9"
+  }
+}
