@@ -1,6 +1,6 @@
 # Programming the material
 
-The standard material is a starting point. Applications can replace optical functions, the distance field, final shading, the full glass fragment program, scattering and background passes. Motion has separate configurable spring channels and a pure deformation callback.
+The standard material is a starting point. [Composited contrast](readability.md) and [size/edge response](material-response.md) are independently configurable public subsystems. Applications can replace optical functions, the distance field, final shading, the full glass fragment program, scattering and background passes. Motion has separate configurable spring channels and a pure deformation callback.
 
 ## Configure the physics
 

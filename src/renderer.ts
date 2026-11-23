@@ -7,6 +7,9 @@ import {createPhysics,type GlassPhysics,type PhysicsOptions,type DeformationFunc
 import { configureSpring, isResting, type MotionOptions, type MotionResult, type SpringOptions } from './motion.js';
 import {shapePixels,shapeDistance,shapeResolution,blendShapes,roundedShape,type GlassShape} from './shape.js';
 import {GlassAnimation,type AnimationCallback,type AnimationOptions} from './animation.js';
+import{createContrast,evaluateContrast,contrastRatio,foregroundColors,protectionColors,type ContrastSettings,type ContrastOptions,type ContrastState}from'./contrast.js';
+import{ContrastSampler}from'./contrast-sampler.js';
+import{createSizeAdaptation,resolveMaterialForSize,type SizeAdaptation}from'./size-adaptation.js';
 
 /** Canvas/image/video sources with consistent WebGL upload orientation. Draw ImageBitmap/ImageData/VideoFrame into a canvas first. */
 export type BackdropSource = HTMLCanvasElement | OffscreenCanvas | HTMLImageElement | HTMLVideoElement;
@@ -23,6 +26,10 @@ export interface RendererOptions {
   onError?: (error: Error) => void;
   physics?:PhysicsOptions;
   shader?:GlassShader;
+  /** Asynchronous composited-material contrast probes. Enabled by default. */
+  readability?:boolean;
+  /** Minimum milliseconds between moving-scene contrast probes. Default 1000/15; 0 samples every dirty frame. */
+  contrastInterval?:number;
 }
 export interface SurfaceOptions {
   id: string;
@@ -46,26 +53,32 @@ export interface SurfaceOptions {
   content?:BackdropSource;
   physics?:PhysicsOptions;
   deform?:DeformationFunction;
+  contrast?:ContrastSettings|false;
+  sizeAdaptation?:Partial<SizeAdaptation>|false;
 }
-export interface SurfaceState { rect: Rect; visualRect: Rect; velocity:Rect;visibility: number; pressed: number; energy: number; moving: boolean; material: Readonly<GlassMaterial> }
+export interface SurfaceState { rect: Rect; visualRect: Rect; velocity:Rect;visibility: number; pressed: number; energy: number; moving: boolean; material: Readonly<GlassMaterial>;baseMaterial:Readonly<GlassMaterial>;contrast:Readonly<ContrastState> }
 export interface RenderStats {
   frames: number; cpuMs: number; gpuMs: number | null;
   drawCalls: number; uploads: number; blurPasses: number;
   surfaces: number; groups: number; pixelRatio: number; textureBytes: number;foregroundUploads:number;reflectionUploads:number;
+  contrastCopies:number;contrastReadbacks:number;
 }
 type Motion = { [K in keyof Rect]: Spring };
 interface Surface {
   id: string; group: string; motion: Motion; press: Spring; reveal: Spring;
   material: Readonly<GlassMaterial>; spacing: number; interactive: boolean;
-  pointer: [number, number]; tone: Spring; fixedTone?: number; detail: number;
+  pointer: [number, number]; tone: Spring; detail: number;
   offsetX: Spring; offsetY: Spring; impulse: Spring; impulseAge: number; pressed: boolean; elastic: boolean;
   materialMotion: Map<string,Spring>; variantMix: Spring;
   waiters: Set<(result: MotionResult)=>void>;
   vibrancy:boolean;
   layer:number;shape:GlassShape|null;shapeFrom:GlassShape|null;shapeMix:Spring;content:BackdropSource|null;contentTexture?:WebGLTexture;contentDirty:boolean;contentBytes:number;
   physics:Readonly<GlassPhysics>;deform:DeformationFunction|null;
+  contrast:Readonly<ContrastOptions>|null;contrastState:ContrastState;readability:Spring;
+  contrastWaiters:Set<(state:Readonly<ContrastState>|null)=>void>;contrastWaitRevision:number;sizeAdaptation:Readonly<SizeAdaptation>|null;
 }
-const materialKeys = ['thickness','edgeWidth','bevel','edgeContrast','refraction','magnification','dispersion','ior','outsideIor','abbeNumber','reflection','cornerPower','frost','tintOpacity','saturation','highlight','shadow','dimming'] as const;
+interface ContrastProbe{surface:Surface;protection:number;color:RGB;revision:number}
+const materialKeys = ['thickness','edgeWidth','bevel','edgeContrast','specularIntensity','specularWidth','shadowRadius','shadowOffset','scatterRadius','ambientSpill','refraction','magnification','dispersion','ior','outsideIor','abbeNumber','reflection','cornerPower','frost','tintOpacity','saturation','highlight','shadow','dimming'] as const;
 interface Program { handle: WebGLProgram; uniforms: Map<string, WebGLUniformLocation | null> }
 interface Target { texture: WebGLTexture; framebuffer: WebGLFramebuffer }
 interface TimerExtension { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }
@@ -97,6 +110,9 @@ export class GlassRenderer {
   private sourceWidth = 0; private sourceHeight = 0;
   private backdropDirty = false; private blurDirty = false;
   private surfaces = new Map<string, Surface>();
+  private groupMembers=new Map<string,Set<Surface>>();
+  private materialCache=new Map<Surface,Readonly<GlassMaterial>>();private baseMaterialCache=new Map<Surface,Readonly<GlassMaterial>>();private contrastRevision=0;
+  private contrastSampler!:ContrastSampler<ContrastProbe>;private contrastDirty=true;private contrastUrgent=true;private lastContrastTime=-Infinity;
   private frame = 0; private lastTime = 0;
   private disposed = false; private lost = false;
   private listeners = new Set<(stats: Readonly<RenderStats>) => void>();
@@ -116,7 +132,7 @@ export class GlassRenderer {
   private settings: Accessibility;
   private overrides: Partial<Accessibility>;
   private media: MediaQueryList[];
-  private metrics: RenderStats = { frames: 0, cpuMs: 0, gpuMs: null, drawCalls: 0, uploads: 0, blurPasses: 0, surfaces: 0, groups: 0, pixelRatio: 1, textureBytes: 0,foregroundUploads:0,reflectionUploads:0 };
+  private metrics: RenderStats = { frames: 0, cpuMs: 0, gpuMs: null, drawCalls: 0, uploads: 0, blurPasses: 0, surfaces: 0, groups: 0, pixelRatio: 1, textureBytes: 0,foregroundUploads:0,reflectionUploads:0,contrastCopies:0,contrastReadbacks:0 };
 
   constructor(canvas: HTMLCanvasElement, options: RendererOptions = {}) {
     this.canvas = canvas; this.options = options; this.quality = options.quality ?? 'balanced';
@@ -124,6 +140,7 @@ export class GlassRenderer {
     if(options.shader){this.shader=createGlassShader({fragment:options.shader.fragment,blurFragment:options.shader.blurFragment,backdropFragment:options.shader.backdropFragment,uniforms:options.shader.uniforms});for(const[name,u]of Object.entries(this.shader.uniforms))this.shaderValues.set(name,u.value);}
     this.validateQuality(this.quality);
     if (options.maxPixelRatio !== undefined && (!Number.isFinite(options.maxPixelRatio) || options.maxPixelRatio <= 0)) throw new RangeError('maxPixelRatio must be positive');
+    if(options.contrastInterval!==undefined&&(!Number.isFinite(options.contrastInterval)||options.contrastInterval<0))throw new RangeError('contrastInterval must be nonnegative');
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: true, depth: false, stencil: false, powerPreference: 'default' });
     if (!gl) throw new Error('WebGL 2 is unavailable. Use the CSS fallback or a hardware-accelerated WebView.');
     this.gl = gl;
@@ -247,6 +264,10 @@ export class GlassRenderer {
     const spacing = options.spacing ?? peers[0]?.spacing ?? 0;
     if (!Number.isFinite(spacing) || spacing < 0 || spacing > 100) throw new RangeError('Spacing must be in [0,100]');
     if (peers.length && spacing !== peers[0].spacing) throw new Error('Merged surfaces must share spacing');
+    const contrast=options.contrast===false?null:options.contrast===undefined&&peers.length?peers[0].contrast:createContrast(options.contrast,peers[0]?.contrast??undefined);
+    const sizeAdaptation=options.sizeAdaptation===false?null:options.sizeAdaptation===undefined&&peers.length?peers[0].sizeAdaptation:createSizeAdaptation(options.sizeAdaptation);
+    if(peers.length&&JSON.stringify(sizeAdaptation)!==JSON.stringify(peers[0].sizeAdaptation))throw new Error('Merged surfaces must share size adaptation');
+    if(peers.length&&JSON.stringify(contrast?{...contrast,region:undefined}:null)!==JSON.stringify(peers[0].contrast?{...peers[0].contrast,region:undefined}:null))throw new Error('Merged surfaces must share contrast policy');
     const physics=createPhysics(options.physics,this.physicsDefaults),spring=(value:number,key:keyof Pick<GlassPhysics,'geometry'|'material'|'press'|'reveal'|'offset'|'impulse'|'tone'|'shape'>)=>new Spring(value,physics[key].frequency,physics[key].damping);
     const motion = Object.fromEntries(rectKeys.map(k => [k, spring(options.rect[k],'geometry')])) as Motion;
     const reveal = spring(options.hidden || options.materialize && !this.settings.reducedMotion ? 0 : 1,'reveal'); reveal.target = options.hidden?0:1;
@@ -256,8 +277,9 @@ export class GlassRenderer {
       offsetX:spring(0,'offset'),offsetY:spring(0,'offset'),impulse:spring(0,'impulse'),impulseAge:0,pressed:false,elastic:options.elastic??true,
       materialMotion,variantMix:spring(material.variant==='clear'?1:0,'material'),waiters:new Set(),vibrancy,
       layer,shape:options.shape??null,shapeFrom:null,shapeMix:spring(1,'shape'),content:options.content??null,contentDirty:!!options.content,contentBytes:0,physics,deform:options.deform??null,
+      contrast,sizeAdaptation,readability:spring(0,'material'),contrastWaiters:new Set(),contrastWaitRevision:0,contrastState:{foreground:material.appearance==='dark'?'light':'dark',source:'pending',ratio:null,minimumRatio:contrast?.minimumRatio??4.5,meetsTarget:null,protection:0},
     };
-    this.surfaces.set(options.id, surface); this.adaptSurface(surface, true); this.invalidate();
+    this.surfaces.set(options.id, surface);const members=this.groupMembers.get(group)??new Set<Surface>();members.add(surface);this.groupMembers.set(group,members);this.adaptSurface(surface, true); this.invalidate();
     return new SurfaceHandle(this, options.id);
   }
   getRect(id: string): Rect {
@@ -267,17 +289,23 @@ export class GlassRenderer {
     return rect;
   }
   getForeground(id: string): string {
-    const s = this.surface(id), m = s.material;
-    const dark = m.appearance==='auto'?s.tone.value:m.appearance==='dark'?1:0;
-    const t = this.settings.increasedContrast ? +(dark>0.5) : Math.max(0,Math.min(1,dark));
-    return `rgb(${Math.round(23+224*t)} ${Math.round(26+222*t)} ${Math.round(36+216*t)})`;
+    const s=this.surface(id),fixed=this.fixedForeground(s),color=foregroundColors[fixed??s.contrastState.foreground];
+    return `rgb(${color.map(v=>Math.round(v*255)).join(' ')})`;
   }
-  private springs(s: Surface): Spring[] { return [...Object.values(s.motion),s.press,s.reveal,s.tone,s.offsetX,s.offsetY,s.impulse,s.variantMix,s.shapeMix,...s.materialMotion.values()]; }
+  private fixedForeground(s:Surface):'light'|'dark'|undefined{const a=s.contrast?.appearance??'material';return a==='light'||a==='dark'?a:a==='auto'||s.material.appearance==='auto'?undefined:s.material.appearance==='dark'?'light':'dark';}
+  private springs(s: Surface): Spring[] { return [...Object.values(s.motion),s.press,s.reveal,s.tone,s.readability,s.offsetX,s.offsetY,s.impulse,s.variantMix,s.shapeMix,...s.materialMotion.values()]; }
   private cancelWaiters(s: Surface) { for(const resolve of s.waiters)resolve({finished:false});s.waiters.clear(); }
-  private currentMaterial(s: Surface): Readonly<GlassMaterial> {
+  private currentMaterial(s: Surface,adapt=true): Readonly<GlassMaterial> {
+    const cached=adapt?this.materialCache.get(s):this.baseMaterialCache.get(s);if(cached)return cached;
+    let base=this.baseMaterialCache.get(s);
+    if(!base){
     const numeric=Object.fromEntries(materialKeys.map(k=>{let value=s.materialMotion.get(k)!.value;if(k==='abbeNumber')value=value<=.000001?0:Math.min(1e6,1/Math.min(.2,value));return[k,Math.max(materialRanges[k][0],Math.min(materialRanges[k][1],value))];}));
     const vectors=Object.fromEntries((['tint','absorption']as const).map(key=>[key,s.material[key].map((_,i)=>Math.max(0,Math.min(1,s.materialMotion.get(`${key}${i}`)!.value)))]));
-    return {...s.material,...numeric,...vectors};
+    base=Object.freeze({...s.material,...numeric,...vectors,tint:Object.freeze(vectors.tint),absorption:Object.freeze(vectors.absorption)})as Readonly<GlassMaterial>;this.baseMaterialCache.set(s,base);
+    }
+    if(!adapt||!s.sizeAdaptation){if(adapt)this.materialCache.set(s,base);return base;}
+    const members=this.groupMembers.get(s.group)!,rects=[...members].map(peer=>this.getRect(peer.id));
+    const resolved=resolveMaterialForSize(base,{width:Math.max(...rects.map(r=>r.x+r.width))-Math.min(...rects.map(r=>r.x)),height:Math.max(...rects.map(r=>r.y+r.height))-Math.min(...rects.map(r=>r.y))},s.sizeAdaptation);this.materialCache.set(s,resolved);return resolved;
   }
   private pose(s:Surface){
     const rect=this.getRect(s.id),press=this.settings.reducedMotion?0:Math.max(0,Math.min(2,s.press.value));
@@ -291,11 +319,14 @@ export class GlassRenderer {
     return {rect,visualRect,visibility:reveal,pressed:press,energy:Math.abs(s.impulse.value)};
   }
   private velocity(s:Surface):Rect{return Object.fromEntries(rectKeys.map(k=>[k,s.motion[k].velocity]))as unknown as Rect;}
-  getState(id: string): SurfaceState {const s=this.surface(id);return{...this.pose(s),velocity:this.velocity(s),moving:this.springs(s).some(spring=>!isResting(spring)),material:this.currentMaterial(s)};}
+  getState(id: string): SurfaceState {const s=this.surface(id);return{...this.pose(s),velocity:this.velocity(s),moving:this.springs(s).some(spring=>!isResting(spring)),material:this.currentMaterial(s),baseMaterial:this.currentMaterial(s,false),contrast:{...s.contrastState,protection:s.readability.value}};}
+  configureContrast(id:string,options:ContrastSettings|false):void{this.assertAlive();const s=this.surface(id),policy=options===false?null:createContrast(options,s.contrast??undefined);for(const peer of this.groupMembers.get(s.group)!){peer.contrast=policy;if(!policy){peer.readability.snap(0);peer.readability.target=0;peer.contrastState.source='pending';this.adaptSurface(peer,true);for(const waiter of peer.contrastWaiters)waiter(null);peer.contrastWaiters.clear();}}this.invalidate();}
+  configureSizeAdaptation(id:string,options:Partial<SizeAdaptation>|false):void{this.assertAlive();const s=this.surface(id),profile=options===false?null:createSizeAdaptation(options);for(const peer of this.groupMembers.get(s.group)!)peer.sizeAdaptation=profile;this.invalidate();}
+  whenContrastReady(id:string):Promise<Readonly<ContrastState>|null>{this.assertAlive();const s=this.surface(id);if(!s.contrast||this.options.readability===false||s.reveal.target===0)return Promise.resolve(null);if(s.contrastState.source==='composited'&&!this.contrastDirty&&!this.contrastSampler.pending)return Promise.resolve({...s.contrastState});return new Promise(resolve=>{s.contrastWaiters.add(resolve);this.contrastUrgent=true;this.invalidate();s.contrastWaitRevision=this.contrastRevision;});}
   getPhysics(id:string):Readonly<GlassPhysics>{return this.surface(id).physics;}
   configurePhysics(id:string,options:PhysicsOptions):void{
     this.assertAlive();const s=this.surface(id),cfg=createPhysics(options,s.physics);
-    const channels={geometry:Object.values(s.motion),material:[...s.materialMotion.values(),s.variantMix],press:[s.press],reveal:[s.reveal],offset:[s.offsetX,s.offsetY],impulse:[s.impulse],tone:[s.tone],shape:[s.shapeMix]};
+    const channels={geometry:Object.values(s.motion),material:[...s.materialMotion.values(),s.variantMix,s.readability],press:[s.press],reveal:[s.reveal],offset:[s.offsetX,s.offsetY],impulse:[s.impulse],tone:[s.tone],shape:[s.shapeMix]};
     for(const key of Object.keys(channels)as(keyof typeof channels)[])if(options[key])for(const spring of channels[key])configureSpring(spring,cfg[key]);
     s.physics=cfg;this.setInteraction(id,s.pressed);this.invalidate();
   }
@@ -316,7 +347,7 @@ export class GlassRenderer {
   configureMotion(id:string,options:SpringOptions):void{this.assertAlive();const s=this.surface(id);const cfg=createPhysics({geometry:options},s.physics);for(const spring of Object.values(s.motion))configureSpring(spring,cfg.geometry);s.physics=cfg;this.invalidate();}
   setVisibility(id: string,visible: boolean,options: MotionOptions = {}): Promise<MotionResult> {
     this.assertAlive();const s=this.surface(id);this.cancelWaiters(s);configureSpring(s.reveal,options.spring);s.reveal.target=visible?1:0;
-    if(!visible){s.press.target=0;s.offsetX.target=s.offsetY.target=0;s.pressed=false;}
+    if(!visible){s.press.target=0;s.offsetX.target=s.offsetY.target=0;s.pressed=false;for(const resolve of s.contrastWaiters)resolve(null);s.contrastWaiters.clear();}
     if(options.immediate||this.settings.reducedMotion)s.reveal.snap();this.invalidate();return this.whenSettled(id);
   }
   updateSurface(id: string, rect: Partial<Rect>, animate = true): void {
@@ -332,7 +363,7 @@ export class GlassRenderer {
     const base = options.variant !== undefined && options.variant !== s.material.variant ? createMaterial({ variant: options.variant }) : s.material;
     const material = createMaterial({ ...base, ...options });
     for (const peer of this.surfaces.values()) if (peer.group === s.group) {
-      this.cancelWaiters(peer);peer.material = material;peer.fixedTone = undefined;
+      this.cancelWaiters(peer);peer.material = material;
       for(const k of materialKeys)peer.materialMotion.get(k)!.target=k==='abbeNumber'?(material[k]>0?1/material[k]:0):material[k];
       for(const key of ['tint','absorption']as const)material[key].forEach((n,i)=>peer.materialMotion.get(`${key}${i}`)!.target=n);
       peer.variantMix.target=material.variant==='clear'?1:0;this.adaptSurface(peer);
@@ -373,9 +404,14 @@ export class GlassRenderer {
     const d=(shape:GlassShape|null)=>shape?shapeDistance(shape,(x-r.x)/r.width,(y-r.y)/r.height,r.width,r.height):round,t=Math.max(0,Math.min(1,s.shapeMix.value));
     return (t<.9999?d(s.shapeFrom)*(1-t)+d(s.shape)*t:d(s.shape))<=0;
   }
-  removeSurface(id: string): void { this.assertAlive();const s=this.surfaces.get(id);if(s){this.cancelWaiters(s);if(s.contentTexture)this.gl.deleteTexture(s.contentTexture);}this.surfaces.delete(id); this.invalidate(); }
+  removeSurface(id: string): void { this.assertAlive();const s=this.surfaces.get(id);if(s){this.cancelWaiters(s);for(const waiter of s.contrastWaiters)waiter(null);s.contrastWaiters.clear();this.groupMembers.get(s.group)?.delete(s);if(!this.groupMembers.get(s.group)?.size)this.groupMembers.delete(s.group);if(s.contentTexture)this.gl.deleteTexture(s.contentTexture);}this.surfaces.delete(id); this.invalidate(); }
   private surface(id: string): Surface { const s = this.surfaces.get(id); if (!s) throw new Error(`Unknown surface: ${id}`); return s; }
   invalidate(): void {
+    this.materialCache.clear();this.baseMaterialCache.clear();this.contrastRevision++;
+    this.schedule(true);
+  }
+  private schedule(probe:boolean):void{
+    if(probe)this.contrastDirty=true;
     if (!this.disposed && !this.lost && !this.frame && !document.hidden) this.frame = requestAnimationFrame(this.render);
   }
   /** Compile before replacing the live program. A failure leaves the previous shader intact. */
@@ -425,6 +461,7 @@ export class GlassRenderer {
   private initialize() {
     const gl = this.gl;
     this.maxTextureSize=gl.getParameter(gl.MAX_TEXTURE_SIZE)as number;
+    this.contrastSampler=new ContrastSampler(gl,this.maxTextureSize);this.contrastDirty=true;this.contrastUrgent=true;this.lastContrastTime=-Infinity;
     this.targets = []; this.queries = [];
     this.shapeAtlas=[];this.shapeAtlasDirty=true;
     this.shapeTexture=gl.createTexture()!;gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.shapeTexture);
@@ -512,6 +549,7 @@ export class GlassRenderer {
   }
   private adaptSurface(s: Surface, snap = false) {
     if(s.material.appearance!=='auto')s.tone.target=s.material.appearance==='dark'?1:0;
+    if(s.contrast&&s.contrastState.source==='composited')return;
     if (!this.sample) {if(snap)s.tone.snap();return;}
     let sum = 0, squares = 0, count = 0;
     for (let iy = 0; iy < 5; iy++) for (let ix = 0; ix < 5; ix++) {
@@ -523,10 +561,43 @@ export class GlassRenderer {
     }
     const avg = sum/count; s.detail = Math.min(1,Math.sqrt(Math.max(0,squares/count-avg*avg))*4);
     const next = avg < 0.35 ? 1 : avg > 0.5 ? 0 : s.tone.target; // hysteresis avoids flicker
-    const large = s.motion.width.target * s.motion.height.target > 70000;
-    if (large && s.fixedTone === undefined) s.fixedTone = next;
-    if(s.material.appearance==='auto')s.tone.target = large ? s.fixedTone! : next;
+    if(s.material.appearance==='auto'&&s.contrastState.source!=='composited')s.tone.target=next;
+    if(s.contrastState.source!=='composited'){s.contrastState.foreground=next?'light':'dark';s.contrastState.source='source';}
     if (snap) s.tone.snap();
+  }
+  private captureContrast(s:Surface,owner:Surface,framebuffer:WebGLFramebuffer|null):void{
+    const r=this.pose(s).visualRect,a=s.contrast!.region,p=this.ratio;
+    const bounds=[Math.max(0,Math.floor((r.x+r.width*a.x)*p)),Math.max(0,Math.floor((this.height-r.y-r.height*(a.y+a.height))*p)),Math.min(this.canvas.width,Math.ceil((r.x+r.width*(a.x+a.width))*p)),Math.min(this.canvas.height,Math.ceil((this.height-r.y-r.height*a.y)*p))]as const;
+    if(bounds[2]<=bounds[0]||bounds[3]<=bounds[1]){for(const waiter of s.contrastWaiters)waiter(null);s.contrastWaiters.clear();return;}
+    this.contrastSampler.capture(framebuffer,bounds,{surface:s,protection:this.uniform(this.programs.glass,'readability')?owner.readability.value:0,color:protectionColors[owner.contrastState.foreground],revision:this.contrastRevision});this.metrics.contrastCopies++;
+  }
+  private pollContrast():void{
+    const results=this.contrastSampler?.poll();if(!results?.length)return;this.metrics.contrastReadbacks++;
+    const groups=new Map<string,{owner:Surface;raw:RGB[];actual:RGB[];revision:number}>();
+    for(const {payload,pixels}of results){
+      const s=payload.surface;if(this.surfaces.get(s.id)!==s||!s.contrast)continue;
+      const group=groups.get(s.group)??{owner:s,raw:[],actual:[],revision:payload.revision};
+      for(let i=0;i<pixels.length;i+=4){
+        const rgb=[pixels[i]/255,pixels[i+1]/255,pixels[i+2]/255]as const;
+        group.actual.push(rgb);group.raw.push(rgb.map((v,j)=>Math.max(0,Math.min(1,(v-payload.color[j]*payload.protection)/Math.max(1-payload.protection,.001))))as unknown as RGB);
+      }groups.set(s.group,group);
+    }
+    for(const [key,group]of groups){
+      const owner=group.owner,policy=owner.contrast!,minimumRatio=Math.max(policy.minimumRatio,this.settings.increasedContrast?7:1);
+      const protection=owner.material.variant==='regular'&&this.uniform(this.programs.glass,'readability')?policy.protection:0;
+      const result=evaluateContrast(group.raw,{...policy,minimumRatio,protection},owner.contrastState.foreground,this.fixedForeground(owner));
+      const luminances=group.raw.map(rgb=>(rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722)),mean=luminances.reduce((a,b)=>a+b,0)/luminances.length,detail=Math.min(1,Math.sqrt(luminances.reduce((sum,v)=>sum+(v-mean)**2,0)/luminances.length)*4);
+      const actualRatio=Math.min(...group.actual.map(rgb=>contrastRatio(foregroundColors[result.foreground],rgb)));
+      const changed=owner.contrastState.foreground!==result.foreground,needsUpdate=Math.abs(owner.readability.target-result.protection)>.003;
+      for(const s of this.groupMembers.get(key)??[]){
+        s.detail=detail;
+        if(changed||result.protection>s.readability.value+.003){s.readability.snap(result.protection);s.readability.target=result.protection;this.contrastDirty=true;this.contrastUrgent=true;}
+        else if(needsUpdate){s.readability.target=result.protection;this.contrastDirty=true;}
+        if(s.material.appearance==='auto'){const target=result.foreground==='light'?1:0;if(s.tone.target!==target){s.tone.target=target;this.contrastDirty=true;}}
+        s.contrastState={foreground:result.foreground,source:'composited',ratio:actualRatio,minimumRatio,meetsTarget:actualRatio>=minimumRatio-.02,protection:s.readability.value};
+        if(group.revision>=s.contrastWaitRevision&&(actualRatio>=minimumRatio-.02||!needsUpdate&&!changed)){for(const waiter of s.contrastWaiters)waiter({...s.contrastState});s.contrastWaiters.clear();}
+      }
+    }
   }
   private uploadVibrancy(){
     if(!this.vibrantDirty)return;const gl=this.gl;this.bindTexture(this.vibrantTexture,2);
@@ -572,6 +643,7 @@ export class GlassRenderer {
   private render = (now: number) => {
     this.frame = 0; if (this.disposed || this.lost) return;
     const start = performance.now(), gl = this.gl;
+    this.pollContrast();
     const elapsed=this.lastTime?Math.max(0,(now-this.lastTime)/1000):0,dt=this.lastTime?Math.min(elapsed,0.1):1/60;this.lastTime=now;
     for(const a of [...this.animations]){
       if(this.settings.reducedMotion&&!a.essential){a.suspend();continue;}
@@ -587,7 +659,11 @@ export class GlassRenderer {
       if(!isResting(s.impulse))s.impulseAge+=dt;
       if (moving) this.adaptSurface(s);
     }
+    this.materialCache.clear();this.baseMaterialCache.clear();
     try {
+      if(moving)this.contrastDirty=true;
+      const probeCount=this.options.readability===false?0:[...this.surfaces.values()].filter(s=>s.contrast&&(s.material.variant!=='identity'||s.content)&&s.reveal.value>.001).length;
+      const probing=this.contrastDirty&&(this.contrastUrgent||now-this.lastContrastTime>=(this.options.contrastInterval??1000/15))&&this.contrastSampler.begin(probeCount);if(probing){this.contrastDirty=false;this.contrastUrgent=false;this.lastContrastTime=now;}else if(!probeCount)this.contrastDirty=false;
       this.metrics.drawCalls = 0; this.pollQueries();
       const query = this.timer && this.queries.length < 4 ? gl.createQuery() : null;
       if (query) gl.beginQuery(this.timer!.TIME_ELAPSED_EXT,query);
@@ -632,6 +708,7 @@ export class GlassRenderer {
         if(depth)gl.uniform4f(this.uniform(p,'scrollEdges'),0,0,0,0);
         for(const entry of entries)if(entry.depth===depth){
           gl.uniform1f(this.uniform(p,'contentOnly'),0);if(entry.list[0].material.variant!=='identity')this.drawGroup(p,entry.list);
+          if(probing)for(const s of entry.list)if(s.contrast&&s.reveal.value>.001)this.captureContrast(s,entry.list[0],scene);
           for(const s of entry.list)if(s.contentTexture){this.bindTexture(s.contentTexture,5);gl.uniform1f(this.uniform(p,'contentOnly'),1);this.drawGroup(p,[s]);}gl.uniform1f(this.uniform(p,'contentOnly'),0);
           if(stacked&&this.options.drawBackdrop===false){
             gl.bindFramebuffer(gl.FRAMEBUFFER,null);if(entry.list[0].material.variant!=='identity')this.drawGroup(p,entry.list);for(const s of entry.list)if(s.contentTexture){this.bindTexture(s.contentTexture,5);gl.uniform1f(this.uniform(p,'contentOnly'),1);this.drawGroup(p,[s]);}gl.uniform1f(this.uniform(p,'contentOnly'),0);gl.bindFramebuffer(gl.FRAMEBUFFER,scene);
@@ -640,16 +717,17 @@ export class GlassRenderer {
       }
       gl.disable(gl.SCISSOR_TEST); gl.disable(gl.BLEND);
       if(stacked&&this.options.drawBackdrop!==false){gl.bindFramebuffer(gl.READ_FRAMEBUFFER,scene);gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,null);gl.blitFramebuffer(0,0,this.canvas.width,this.canvas.height,0,0,this.canvas.width,this.canvas.height,gl.COLOR_BUFFER_BIT,gl.NEAREST);}
+      if(probing)this.contrastSampler.submit();
       gl.bindFramebuffer(gl.FRAMEBUFFER,null);
       if (query) { gl.endQuery(this.timer!.TIME_ELAPSED_EXT); this.queries.push(query); }
       this.metrics.frames++; this.metrics.cpuMs = performance.now()-start;
       this.metrics.groups = groups.size; this.metrics.surfaces = this.surfaces.size; this.metrics.pixelRatio = this.ratio;
       this.metrics.textureBytes = (this.sourceWidth*this.sourceHeight*4/3 + this.vibrantWidth*this.vibrantHeight+2*this.blurWidth*this.blurHeight+2*this.wideWidth*this.wideHeight + this.canvas.width*this.canvas.height+(this.targets.length>4?2*this.canvas.width*this.canvas.height+2*this.blurWidth*this.blurHeight+2*this.wideWidth*this.wideHeight:0)+shapeResolution**2*Math.max(1,this.shapeAtlas.length))*4;
       for(const s of this.surfaces.values())this.metrics.textureBytes+=s.contentBytes;
-      this.metrics.textureBytes+=this.reflectionWidth*this.reflectionHeight*4;
+      this.metrics.textureBytes+=this.reflectionWidth*this.reflectionHeight*4+this.contrastSampler.bytes;
       for (const listener of this.listeners) listener(this.stats);
       for(const s of this.surfaces.values())if(this.springs(s).every(isResting)){for(const resolve of s.waiters)resolve({finished:true});s.waiters.clear();}
-      if (moving || [...this.animations].some(a=>a.running&&(!this.settings.reducedMotion||a.essential)) || [...this.surfaces.values()].some(s => this.springs(s).some(spring=>!isResting(spring)))) this.invalidate();
+      if (moving || this.contrastSampler.pending || this.contrastDirty || [...this.animations].some(a=>a.running&&(!this.settings.reducedMotion||a.essential)) || [...this.surfaces.values()].some(s => this.springs(s).some(spring=>!isResting(spring)))) this.schedule(false);
     } catch (error) { this.options.onError?.(error instanceof Error ? error : new Error(String(error))); if (!this.options.onError) console.error(error); }
   };
   private drawGroup(p: Program, list: Surface[]) {
@@ -666,7 +744,7 @@ export class GlassRenderer {
       if (s.press.value >= press) { press = s.press.value; pointer = s.pointer; }
       if(state.energy>energy){energy=state.energy;age=s.impulseAge;pointer=s.pointer;}
     }
-    const pad = 40+first.spacing, x = Math.max(0,Math.floor((minX-pad)*this.ratio)), y = Math.max(0,Math.floor((this.height-maxY-pad)*this.ratio));
+    const pad = Math.max(40,m.shadowRadius*6+m.shadowOffset)+first.spacing, x = Math.max(0,Math.floor((minX-pad)*this.ratio)), y = Math.max(0,Math.floor((this.height-maxY-pad)*this.ratio));
     const right = Math.min(this.canvas.width,Math.ceil((maxX+pad)*this.ratio)), top = Math.min(this.canvas.height,Math.ceil((this.height-minY+pad)*this.ratio));
     if (right <= x || top <= y) return;
     gl.scissor(x,y,right-x,top-y);
@@ -677,6 +755,9 @@ export class GlassRenderer {
     gl.uniform1i(this.uniform(p,'count'),list.length); gl.uniform1f(this.uniform(p,'spacing'),first.spacing);
     gl.uniform2f(this.uniform(p,'lensCenter'),(minX+maxX)/2,(minY+maxY)/2);gl.uniform1f(this.uniform(p,'magnification'),m.magnification);gl.uniform1f(this.uniform(p,'useVibrancy'),first.vibrancy&&this.vibrantSource?1:0);
     gl.uniform4f(this.uniform(p,'optics'),m.thickness,m.refraction,this.quality==='low'?0:m.dispersion,m.frost);
+    gl.uniform4f(this.uniform(p,'edgeFinish'),m.specularIntensity,m.specularWidth,m.shadowRadius,m.shadowOffset);
+    gl.uniform2f(this.uniform(p,'diffusion'),m.scatterRadius,m.ambientSpill);
+    gl.uniform4f(this.uniform(p,'readability'),...protectionColors[first.contrastState.foreground],first.readability.value);
     gl.uniform3f(this.uniform(p,'physical'),m.ior,m.reflection,m.cornerPower);
     gl.uniform2f(this.uniform(p,'medium'),m.outsideIor,this.quality==='low'?0:m.abbeNumber);
     gl.uniform3fv(this.uniform(p,'absorption'),m.absorption);
@@ -691,9 +772,10 @@ export class GlassRenderer {
   dispose(): void {
     if (this.disposed) return; this.disposed = true; cancelAnimationFrame(this.frame);
     for(const a of [...this.animations])a.cancel();this.animations.clear();
-    for (const fn of this.cleanup) fn();this.listeners.clear();for(const s of this.surfaces.values()){this.cancelWaiters(s);if(s.contentTexture)this.gl.deleteTexture(s.contentTexture);}this.surfaces.clear();
+    for (const fn of this.cleanup) fn();this.listeners.clear();for(const s of this.surfaces.values()){this.cancelWaiters(s);for(const waiter of s.contrastWaiters)waiter(null);s.contrastWaiters.clear();if(s.contentTexture)this.gl.deleteTexture(s.contentTexture);}this.surfaces.clear();this.groupMembers.clear();this.materialCache.clear();this.baseMaterialCache.clear();
     const gl = this.gl;
     if (!this.lost) {
+      this.contrastSampler?.dispose();
       for (const t of this.targets) { gl.deleteTexture(t.texture); gl.deleteFramebuffer(t.framebuffer); }
       if (this.programs) for (const p of Object.values(this.programs)) gl.deleteProgram(p.handle);
       for (const q of this.queries) gl.deleteQuery(q);
@@ -708,6 +790,9 @@ export class SurfaceHandle {
   get rect(): Rect { return this.renderer.getRect(this.id); }
   get foreground(): string { return this.renderer.getForeground(this.id); }
   get state(): SurfaceState { return this.renderer.getState(this.id); }
+  contrast(options:ContrastSettings|false):this{this.renderer.configureContrast(this.id,options);return this;}
+  contrastReady():Promise<Readonly<ContrastState>|null>{return this.renderer.whenContrastReady(this.id);}
+  sizeAdaptation(options:Partial<SizeAdaptation>|false):this{this.renderer.configureSizeAdaptation(this.id,options);return this;}
   get physics():Readonly<GlassPhysics>{return this.renderer.getPhysics(this.id);}
   configurePhysics(options:PhysicsOptions):this{this.renderer.configurePhysics(this.id,options);return this;}
   deform(fn:DeformationFunction|null):this{this.renderer.setDeformation(this.id,fn);return this;}

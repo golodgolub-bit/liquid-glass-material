@@ -35,3 +35,7 @@ renderer.dispose();
 
 import {GlassEffectContainer,spectralIndices,absorptionFromTransmittance} from '../dist/index.js';
 const effects=new GlassEffectContainer(renderer,{namespace:"typed"});void effects.reconcile([{id:"a",rect:{x:0,y:0,width:80,height:40,radius:20}}]);effects.material({abbeNumber:58,outsideIor:1,absorption:absorptionFromTransmittance([.9,1,1],20)});void spectralIndices(1.52,58);effects.dispose();
+
+import {createContrast,createSizeAdaptation,contrastRatio,resolveMaterialForSize,materials} from "../dist/index.js";
+front.contrast(createContrast({appearance:"auto",region:{x:.2,width:.6}})).sizeAdaptation(createSizeAdaptation({thickness:.4}));
+void front.contrastReady();void front.state.baseMaterial;void contrastRatio([1,1,1],[0,0,0]);void resolveMaterialForSize(materials.clearDimmed,{width:300,height:180});

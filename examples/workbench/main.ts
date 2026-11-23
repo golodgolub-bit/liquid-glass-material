@@ -2,7 +2,7 @@ import{GlassRenderer,createGlassShader,slabOpticsGLSL,springFromPhysical,bindDra
 const $=<T extends HTMLElement=HTMLElement>(s:string)=>document.querySelector<T>(s)!;
 const canvas=$<HTMLCanvasElement>('canvas'),stage=$('.stage'),lensButton=$<HTMLButtonElement>('.lens'),status=$<HTMLOutputElement>('#status'),model=$<HTMLSelectElement>('#model'),code=$<HTMLTextAreaElement>('#code');
 const renderer=new GlassRenderer(canvas,{measureGpu:true}),source=document.createElement('canvas'),mask=document.createElement('canvas'),stopSize=observeSize(renderer);
-const lens=renderer.addSurface({id:'developer-lens',rect:{x:140,y:170,width:210,height:84,radius:42},vibrancy:true,material:{variant:'clear',appearance:'light',frost:.02,highlight:.25,shadow:.025,bevel:0}});
+const lens=renderer.addSurface({id:'developer-lens',sizeAdaptation:false,rect:{x:140,y:170,width:210,height:84,radius:42},vibrancy:true,material:{variant:'clear',appearance:'light',frost:.02,highlight:.25,shadow:.025,bevel:0}});
 const standard='GlassOpticalSample ray = defaultGlassOptics(data);\nray.displacement *= uGlass_gain;\nreturn ray;';
 const slab='GlassOpticalSample ray = defaultGlassOptics(data);\nfloat t = clamp(data.depth / max(data.width, .001), 0.0, 1.0);\nfloat height = 1.0 - pow(1.0 - t, 3.0);\nSlabRay path = traceSlab(vec3(0,0,-1), ray.normal, vec3(0,0,1),\n    data.ior, 1.0, data.thickness * height, uGlass_gap);\nray.displacement = path.offset * uGlass_gain * data.presence;\nreturn ray;';
 const number=(id:string)=>+$<HTMLInputElement>('#'+id).value;

@@ -13,12 +13,16 @@ Import runtime values and types from `@liquid-glass/material`; import `@liquid-g
 | Spring frequency / damping | Cycles per second / dimensionless damping ratio |
 | Physical spring | Mass, stiffness and viscous damping in a consistent application unit system |
 | Velocity / time | CSS pixels per second / seconds; angles are radians |
+| Contrast sampling interval | Milliseconds; default `1000 / 15`, independent of animation rate |
+| Contrast region | Normalized local coordinates inside the surface rectangle |
 
 `createMaterial()` returns an immutable validated material. `surface.material(partial)` merges fields and animates numeric values; changing the variant starts from that variant's preset. `identity` disables the optical effect and preserves local content. `materialRanges` exposes the validated numeric domain. A weakly damped spring may overshoot internally; values sent to the GPU are constrained to this domain.
 
 Use one `GlassRenderer` per composited scene. Members of the same optical group must share material, spacing, layer and vibrancy. A group accepts up to 32 members. Higher layers refract the completed lower layers when they overlap. Disjoint groups reuse the same cached background scattering.
 
 `surface.rect` is the spring geometry; `surface.state.visualRect` includes touch, reveal and custom deformation. DOM bindings and hit tests use the visual rectangle. Promises resolve with `{finished:false}` when interrupted or disposed. `dispose()` releases resources and event listeners; dispose bindings before their renderer.
+
+`state.baseMaterial` contains current material springs; `state.material` includes optional geometry-dependent response. Read [Material response](material-response.md) before porting manually scaled effects. `state.contrast` reports completed regional measurements. `contrastReady()` returns a contrast state or `null` when unavailable; see [Composited contrast](readability.md) for latency, ink policies and sampled coverage.
 
 The renderer owns a single demand-driven animation loop. `addAnimation()` participates in this scheduler; `pause()` stops decorative motion, `cancel()` unregisters it. Reduced Motion bypasses custom deformation and suspends nonessential programs. It does not remove semantic controls or keyboard interaction.
 
@@ -51,6 +55,30 @@ export declare const materialRanges: Readonly<{
         number
     ];
     edgeContrast: readonly [
+        number,
+        number
+    ];
+    specularIntensity: readonly [
+        number,
+        number
+    ];
+    specularWidth: readonly [
+        number,
+        number
+    ];
+    shadowRadius: readonly [
+        number,
+        number
+    ];
+    shadowOffset: readonly [
+        number,
+        number
+    ];
+    scatterRadius: readonly [
+        number,
+        number
+    ];
+    ambientSpill: readonly [
         number,
         number
     ];
@@ -123,6 +151,15 @@ export interface GlassMaterial {
     bevel: number;
     /** Narrow contrast contour, independent from decorative bevel. */
     edgeContrast: number;
+    /** Edge illumination independent from raised bevel shading. */
+    specularIntensity: number;
+    specularWidth: number;
+    shadowRadius: number;
+    shadowOffset: number;
+    /** Effective interpolation radius of the cached scattering kernels, CSS pixels. */
+    scatterRadius: number;
+    /** Local ambient color carried into the surface and its shadow. */
+    ambientSpill: number;
     refraction: number;
     /** Interior lens magnification, independent from the curved edge. */
     magnification: number;
@@ -160,6 +197,15 @@ export declare const materials: Readonly<{
         bevel: number;
         /** Narrow contrast contour, independent from decorative bevel. */
         edgeContrast: number;
+        /** Edge illumination independent from raised bevel shading. */
+        specularIntensity: number;
+        specularWidth: number;
+        shadowRadius: number;
+        shadowOffset: number;
+        /** Effective interpolation radius of the cached scattering kernels, CSS pixels. */
+        scatterRadius: number;
+        /** Local ambient color carried into the surface and its shadow. */
+        ambientSpill: number;
         refraction: number;
         /** Interior lens magnification, independent from the curved edge. */
         magnification: number;
@@ -188,16 +234,24 @@ export declare const materials: Readonly<{
     clear: Readonly<{
         variant: "clear";
         frost: 0.08;
+        scatterRadius: 6;
         refraction: 17;
         thickness: 16;
         highlight: 0.6;
-        appearance: "dark";
+        appearance: Appearance;
         /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
         edgeWidth: number;
         /** Optional raised edge shading, [0,1]. Disabled by default. */
         bevel: number;
         /** Narrow contrast contour, independent from decorative bevel. */
         edgeContrast: number;
+        /** Edge illumination independent from raised bevel shading. */
+        specularIntensity: number;
+        specularWidth: number;
+        shadowRadius: number;
+        shadowOffset: number;
+        /** Local ambient color carried into the surface and its shadow. */
+        ambientSpill: number;
         /** Interior lens magnification, independent from the curved edge. */
         magnification: number;
         dispersion: number;
@@ -219,6 +273,47 @@ export declare const materials: Readonly<{
         /** Localized darkening, particularly useful for Clear over bright media. */
         dimming: number;
     }>;
+    clearDimmed: Readonly<{
+        variant: "clear";
+        frost: 0.08;
+        scatterRadius: 6;
+        refraction: 17;
+        thickness: 16;
+        highlight: 0.6;
+        dimming: 0.35;
+        appearance: Appearance;
+        /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
+        edgeWidth: number;
+        /** Optional raised edge shading, [0,1]. Disabled by default. */
+        bevel: number;
+        /** Narrow contrast contour, independent from decorative bevel. */
+        edgeContrast: number;
+        /** Edge illumination independent from raised bevel shading. */
+        specularIntensity: number;
+        specularWidth: number;
+        shadowRadius: number;
+        shadowOffset: number;
+        /** Local ambient color carried into the surface and its shadow. */
+        ambientSpill: number;
+        /** Interior lens magnification, independent from the curved edge. */
+        magnification: number;
+        dispersion: number;
+        /** Refractive index and strength of environment reflection. */
+        ior: number;
+        /** Refractive index of the surrounding medium. Refraction uses outsideIor / ior. */
+        outsideIor: number;
+        /** Vd dispersion: 0 keeps artistic RGB separation; positive values enable Cauchy RGB indices. */
+        abbeNumber: number;
+        /** Beer-Lambert extinction coefficients per CSS pixel, RGB, [0,1]. */
+        absorption: RGB;
+        reflection: number;
+        /** Continuous corner profile; circles and full capsules stay circular. */
+        cornerPower: number;
+        tint: RGB;
+        tintOpacity: number;
+        saturation: number;
+        shadow: number;
+    }>;
     identity: Readonly<{
         variant: "identity";
         appearance: Appearance;
@@ -230,6 +325,15 @@ export declare const materials: Readonly<{
         bevel: number;
         /** Narrow contrast contour, independent from decorative bevel. */
         edgeContrast: number;
+        /** Edge illumination independent from raised bevel shading. */
+        specularIntensity: number;
+        specularWidth: number;
+        shadowRadius: number;
+        shadowOffset: number;
+        /** Effective interpolation radius of the cached scattering kernels, CSS pixels. */
+        scatterRadius: number;
+        /** Local ambient color carried into the surface and its shadow. */
+        ambientSpill: number;
         refraction: number;
         /** Interior lens magnification, independent from the curved edge. */
         magnification: number;
@@ -269,6 +373,8 @@ import { type GlassPhysics, type PhysicsOptions, type DeformationFunction } from
 import { type MotionOptions, type MotionResult, type SpringOptions } from './motion.js';
 import { type GlassShape } from './shape.js';
 import { GlassAnimation, type AnimationCallback, type AnimationOptions } from './animation.js';
+import { type ContrastSettings, type ContrastState } from './contrast.js';
+import { type SizeAdaptation } from './size-adaptation.js';
 /** Canvas/image/video sources with consistent WebGL upload orientation. Draw ImageBitmap/ImageData/VideoFrame into a canvas first. */
 export type BackdropSource = HTMLCanvasElement | OffscreenCanvas | HTMLImageElement | HTMLVideoElement;
 export interface Accessibility {
@@ -294,6 +400,10 @@ export interface RendererOptions {
     onError?: (error: Error) => void;
     physics?: PhysicsOptions;
     shader?: GlassShader;
+    /** Asynchronous composited-material contrast probes. Enabled by default. */
+    readability?: boolean;
+    /** Minimum milliseconds between moving-scene contrast probes. Default 1000/15; 0 samples every dirty frame. */
+    contrastInterval?: number;
 }
 export interface SurfaceOptions {
     id: string;
@@ -317,6 +427,8 @@ export interface SurfaceOptions {
     content?: BackdropSource;
     physics?: PhysicsOptions;
     deform?: DeformationFunction;
+    contrast?: ContrastSettings | false;
+    sizeAdaptation?: Partial<SizeAdaptation> | false;
 }
 export interface SurfaceState {
     rect: Rect;
@@ -327,6 +439,8 @@ export interface SurfaceState {
     energy: number;
     moving: boolean;
     material: Readonly<GlassMaterial>;
+    baseMaterial: Readonly<GlassMaterial>;
+    contrast: Readonly<ContrastState>;
 }
 export interface RenderStats {
     frames: number;
@@ -341,6 +455,8 @@ export interface RenderStats {
     textureBytes: number;
     foregroundUploads: number;
     reflectionUploads: number;
+    contrastCopies: number;
+    contrastReadbacks: number;
 }
 /** A shared backdrop and GPU compositor. Owns no DOM content or application event loop. */
 export declare class GlassRenderer {
@@ -381,6 +497,9 @@ export declare class GlassRenderer {
     getRect(id: string): Rect;
     getForeground(id: string): string;
     getState(id: string): SurfaceState;
+    configureContrast(id: string, options: ContrastSettings | false): void;
+    configureSizeAdaptation(id: string, options: Partial<SizeAdaptation> | false): void;
+    whenContrastReady(id: string): Promise<Readonly<ContrastState> | null>;
     getPhysics(id: string): Readonly<GlassPhysics>;
     configurePhysics(id: string, options: PhysicsOptions): void;
     setDeformation(id: string, fn: DeformationFunction | null): void;
@@ -414,6 +533,9 @@ export declare class SurfaceHandle {
     get rect(): Rect;
     get foreground(): string;
     get state(): SurfaceState;
+    contrast(options: ContrastSettings | false): this;
+    contrastReady(): Promise<Readonly<ContrastState> | null>;
+    sizeAdaptation(options: Partial<SizeAdaptation> | false): this;
     get physics(): Readonly<GlassPhysics>;
     configurePhysics(options: PhysicsOptions): this;
     deform(fn: DeformationFunction | null): this;
@@ -435,6 +557,81 @@ export declare class SurfaceHandle {
 }
 ```
 
+## contrast
+
+```ts
+import type { RGB } from './material.js';
+export type ForegroundAppearance = 'auto' | 'light' | 'dark' | 'material';
+export interface ContrastRegion {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+export interface ContrastOptions {
+    /** material follows GlassMaterial.appearance; auto always chooses readable ink. */
+    appearance: ForegroundAppearance;
+    /** Normalized local rectangle occupied by foreground, excluding the refracting edge. */
+    region: Readonly<ContrastRegion>;
+    minimumRatio: number;
+    /** Maximum neutral protection opacity for Regular. Clear never adds this protection. */
+    protection: number;
+}
+export type ContrastSettings = Partial<Omit<ContrastOptions, 'region'>> & {
+    region?: Partial<ContrastRegion>;
+};
+export interface ContrastState {
+    foreground: 'light' | 'dark';
+    source: 'pending' | 'source' | 'composited' | 'explicit';
+    ratio: number | null;
+    minimumRatio: number;
+    meetsTarget: boolean | null;
+    protection: number;
+}
+export declare const foregroundColors: Readonly<{
+    dark: RGB;
+    light: RGB;
+}>;
+export declare const protectionColors: Readonly<{
+    dark: RGB;
+    light: RGB;
+}>;
+export declare const defaultContrast: Readonly<ContrastOptions>;
+export declare function createContrast(options?: ContrastSettings, base?: Readonly<ContrastOptions>): Readonly<ContrastOptions>;
+export declare function relativeLuminance(rgb: RGB): number;
+export declare function contrastRatio(a: RGB, b: RGB): number;
+export interface ContrastEvaluation {
+    foreground: 'light' | 'dark';
+    ratio: number;
+    protection: number;
+    meetsTarget: boolean;
+}
+/** Evaluate actual RGB samples. Protection is solved in sRGB, the compositor's mixing space. */
+export declare function evaluateContrast(samples: readonly RGB[], options?: Readonly<ContrastOptions>, previous?: 'light' | 'dark', fixed?: 'light' | 'dark'): ContrastEvaluation;
+```
+
+## size-adaptation
+
+```ts
+import { type GlassMaterial } from './material.js';
+export interface SizeAdaptation {
+    referenceArea: number;
+    thickness: number;
+    refraction: number;
+    frost: number;
+    shadow: number;
+    shadowRadius: number;
+    scatterRadius: number;
+}
+export declare const defaultSizeAdaptation: Readonly<SizeAdaptation>;
+export declare function createSizeAdaptation(options?: Partial<SizeAdaptation>): Readonly<SizeAdaptation>;
+/** Effective material at the current geometry; base parameters are never mutated. */
+export declare function resolveMaterialForSize(material: Readonly<GlassMaterial>, rect: {
+    width: number;
+    height: number;
+}, profile?: Readonly<SizeAdaptation>): Readonly<GlassMaterial>;
+```
+
 ## effect-container
 
 ```ts
@@ -443,6 +640,8 @@ import { type GlassMaterial } from './material.js';
 import { type Rect } from './geometry.js';
 import { type PhysicsOptions } from './physics.js';
 import type { GlassShape } from './shape.js';
+import type { SizeAdaptation } from './size-adaptation.js';
+import type { ContrastSettings } from './contrast.js';
 import type { MotionResult } from './motion.js';
 export type GlassEffectTransition = 'matchedGeometry' | 'materialize' | 'identity';
 export interface GlassEffectItem {
@@ -462,6 +661,8 @@ export interface GlassEffectContainerOptions {
     material?: Partial<GlassMaterial>;
     physics?: PhysicsOptions;
     transition?: GlassEffectTransition;
+    contrast?: ContrastSettings | false;
+    sizeAdaptation?: Partial<SizeAdaptation> | false;
 }
 /** Reconciles stable effect identities without replacing their springs or GPU renderer. */
 export declare class GlassEffectContainer {
@@ -1055,6 +1256,10 @@ export { GlassAnimation } from './animation.js';
 export type { AnimationFrame, AnimationCallback, AnimationOptions } from './animation.js';
 export { createMaterial, materials, materialRanges } from './material.js';
 export type { GlassMaterial, Quality, Appearance, RGB } from './material.js';
+export { createContrast, defaultContrast, contrastRatio, relativeLuminance, foregroundColors, protectionColors, evaluateContrast } from './contrast.js';
+export type { ContrastSettings, ContrastOptions, ContrastRegion, ContrastState, ForegroundAppearance, ContrastEvaluation } from './contrast.js';
+export { createSizeAdaptation, defaultSizeAdaptation, resolveMaterialForSize } from './size-adaptation.js';
+export type { SizeAdaptation } from './size-adaptation.js';
 export { Spring } from './spring.js';
 export { roundedRectDistance, smoothUnion } from './geometry.js';
 export type { Rect } from './geometry.js';

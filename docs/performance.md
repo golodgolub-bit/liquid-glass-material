@@ -1,5 +1,21 @@
 # Performance
 
+## v0.8: composited readability enabled
+
+23 November 2026, Windows / Edge / Intel UHD Graphics (0x9B41), ANGLE D3D11; 800x500 at DPR 1. Each scene has 60 measured frames after warmup. Both runs enable default composited contrast probes (15 Hz maximum during continuous changes) and size response. The spectral run additionally enables Vd=58. Empty rAF median is 16.7 ms.
+
+| Scene | Default GPU median | Spectral GPU median | Default frame p95 | Spectral frame p95 | Default CPU median / p95 |
+|---|---:|---:|---:|---:|---:|
+| One surface | 0.53 ms | 0.55 ms | 20.1 ms | 18.9 ms | 1.1 / 4.5 ms |
+| 8 disjoint | 1.09 ms | 1.17 ms | 25.9 ms | 19.7 ms | 4.7 / 13.6 ms |
+| 24 disjoint | 2.36 ms | 2.54 ms | 23.7 ms | 24.2 ms | 2.3 / 9.1 ms |
+| 3 stacked | 2.24 ms | 2.28 ms | 18.5 ms | 21.6 ms | 0.5 / 2.2 ms |
+| 8 stacked | 7.12 ms | 7.18 ms | 19.9 ms | 19.5 ms | 1.0 / 4.4 ms |
+
+Both runs recorded one backdrop upload and zero idle frames. Raw reports include contrast-copy/readback counters: [default](benchmarks/v0.8-hardware.json), [spectral](benchmarks/v0.8-spectral-hardware.json). GPU medians remain close to the earlier optical baseline, but CPU readback and processing have a measurable cost. Several p95 intervals exceed 16.67 ms; this is not evidence of guaranteed 60/120 Hz or native-device parity. The short runs also contain scheduling and warmup noise.
+
+`RendererOptions.contrastInterval` controls the latency/cost tradeoff; zero samples every dirty frame and is more expensive. `readability: false` removes this subsystem for custom foreground pipelines. Initial/explicit readiness and necessary stronger protection can bypass the interval. Avoid interpreting the sampling rate as the animation rate. Geometry and optics are rendered every active presentation frame. Regional sampling uses nonblocking fences but still incurs driver and CPU overhead.
+
 ## v0.7: default and spectral optics
 
 23 November 2026, Windows / Edge / Intel UHD Graphics (0x9B41), ANGLE D3D11. Viewport 800x500 at DPR 1; 60 measured frames per scene. Empty rAF median: 16.7 ms in both runs. The spectral run enables Vd=58; both runs use the same background and moving geometry.
@@ -37,7 +53,9 @@ These are the [v0.6 raw measurements](benchmarks/v0.6-hardware.json), retained a
 - Disjoint groups share cached textures; overlapping layers require additional snapshots and scattering.
 - Reflection rotation and uniform changes do not re-upload source images.
 - SVG fields are generated once and uploaded once per contour.
-- No readPixels/getError calls in the ordinary rendering path.
+- Contrast uses a bounded asynchronous pixel-pack-buffer readback; no direct CPU `readPixels`, blocking fence waits or per-frame `getError` calls.
+- Contrast sampling has an independent configurable interval; geometry still updates every presentation frame.
+- Effective material values are cached within a frame and invalidated by geometry/material changes.
 - A demand-driven scheduler sleeps after springs and programs stop.
 - Low quality disables chromatic sampling and limits DPR.
 

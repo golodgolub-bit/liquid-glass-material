@@ -18,7 +18,7 @@ function publicDeclarations(content){
   const printed=printer.printFile(transformed.transformed[0]);transformed.dispose();return printed;
 }
 const intro=await readFile('tools/api-intro.md','utf8');
-const order=['material','renderer','effect-container','physics','motion','animation','shader-program','optics','shape','dom','drag','selection','highlight','components','presentation','search','scroll','environment','media','dom-backdrop','spring','geometry','index'];
+const order=['material','renderer','contrast','size-adaptation','effect-container','physics','motion','animation','shader-program','optics','shape','dom','drag','selection','highlight','components','presentation','search','scroll','environment','media','dom-backdrop','spring','geometry','index'];
 const sections=[];
 for(const name of order){const output=outputs.find(o=>o.file.replaceAll('\\','/').endsWith('/'+name+'.d.ts'));if(!output)continue;const heading=name==='material'?'GlassMaterial':name==='renderer'?'GlassRenderer and SurfaceHandle':name;sections.push(`## ${heading}\n\n\`\`\`ts\n${publicDeclarations(output.content).trim()}\n\`\`\`\n`);}
 await writeFile('docs/api.md',intro+'\n'+sections.join('\n'));console.log('Generated public API from '+sections.length+' declaration modules');

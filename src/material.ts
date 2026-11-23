@@ -3,7 +3,7 @@ export type Quality = 'low' | 'balanced' | 'high';
 export type Appearance = 'auto' | 'light' | 'dark';
 const limits=(min:number,max:number)=>Object.freeze([min,max]as const);
 /** Numeric bounds used for input validation and projecting oscillating springs onto valid optics. */
-export const materialRanges=Object.freeze({thickness:limits(0,100),edgeWidth:limits(0,32),bevel:limits(0,1),edgeContrast:limits(0,1),refraction:limits(0,100),magnification:limits(1,2),dispersion:limits(0,5),ior:limits(1,2.5),outsideIor:limits(1,2.5),abbeNumber:limits(0,1e6),reflection:limits(0,1),cornerPower:limits(2,4),frost:limits(0,1),tintOpacity:limits(0,1),saturation:limits(0,3),highlight:limits(0,2),shadow:limits(0,1),dimming:limits(0,1)});
+export const materialRanges=Object.freeze({thickness:limits(0,100),edgeWidth:limits(0,32),bevel:limits(0,1),edgeContrast:limits(0,1),specularIntensity:limits(0,2),specularWidth:limits(.1,12),shadowRadius:limits(.1,32),shadowOffset:limits(0,24),scatterRadius:limits(0,12),ambientSpill:limits(0,1),refraction:limits(0,100),magnification:limits(1,2),dispersion:limits(0,5),ior:limits(1,2.5),outsideIor:limits(1,2.5),abbeNumber:limits(0,1e6),reflection:limits(0,1),cornerPower:limits(2,4),frost:limits(0,1),tintOpacity:limits(0,1),saturation:limits(0,3),highlight:limits(0,2),shadow:limits(0,1),dimming:limits(0,1)});
 
 /** All spatial parameters use CSS pixels; colors use sRGB in [0, 1]. */
 export interface GlassMaterial {
@@ -17,6 +17,15 @@ export interface GlassMaterial {
   bevel:number;
   /** Narrow contrast contour, independent from decorative bevel. */
   edgeContrast:number;
+  /** Edge illumination independent from raised bevel shading. */
+  specularIntensity:number;
+  specularWidth:number;
+  shadowRadius:number;
+  shadowOffset:number;
+  /** Effective interpolation radius of the cached scattering kernels, CSS pixels. */
+  scatterRadius:number;
+  /** Local ambient color carried into the surface and its shadow. */
+  ambientSpill:number;
   refraction: number;
   /** Interior lens magnification, independent from the curved edge. */
   magnification: number;
@@ -43,13 +52,14 @@ export interface GlassMaterial {
   dimming: number;
 }
 const base: GlassMaterial = {
-  variant: 'regular', appearance: 'auto', thickness: 18, edgeWidth:12, bevel:0, edgeContrast:.18, refraction: 13, magnification:1,
+  variant: 'regular', appearance: 'auto', thickness: 18, edgeWidth:12, bevel:0, edgeContrast:.18,specularIntensity:.55,specularWidth:1.4,shadowRadius:5,shadowOffset:1.5,scatterRadius:9,ambientSpill:.12, refraction: 13, magnification:1,
   dispersion: 0.35, ior:1.48,outsideIor:1,abbeNumber:0,absorption:Object.freeze([0,0,0])as RGB,reflection:.38,cornerPower:2.6,frost: 0.68, tint: Object.freeze([1, 1, 1]) as RGB, tintOpacity: 0,
   saturation: 1.12, highlight: 0.5, shadow: 0.065, dimming: 0,
 };
 export const materials = Object.freeze({
   regular: Object.freeze({ ...base }),
-  clear: Object.freeze({ ...base, variant: 'clear' as const, frost: 0.08, refraction: 17, thickness: 16, highlight: 0.6, appearance: 'dark' as const }),
+  clear: Object.freeze({ ...base, variant: 'clear' as const, frost: 0.08,scatterRadius:6,refraction: 17, thickness: 16, highlight: 0.6 }),
+  clearDimmed:Object.freeze({...base,variant:'clear' as const,frost:.08,scatterRadius:6,refraction:17,thickness:16,highlight:.6,dimming:.35}),
   identity: Object.freeze({ ...base, variant: 'identity' as const }),
 });
 const range = (n: number, min: number, max: number, key: string) => {

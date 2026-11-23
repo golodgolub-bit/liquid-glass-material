@@ -1,6 +1,6 @@
 # Validation
 
-Local v0.7 verification passed **21 unit tests and 48 browser checks** on the hardware path below. NodeNext declarations, built ESM rendering, demo and host-asset builds are checked separately.
+Local v0.8 verification covers **23 unit tests and 57 browser checks** on the hardware path below. NodeNext declarations, built ESM rendering, demo and host-asset builds are checked separately.
 
 ## Automated checks
 
@@ -15,13 +15,15 @@ The unit suite verifies spring integration, retargeting, physical spring convers
 
 Browser coverage includes refraction, layered glass/local content, free contours and holes, shape interruption, touch/drag outside the original hit box, pointer-capture fallback, semantic keyboard controls, text recoloring, context loss/restoration, shader rollback, custom uniforms/scattering and reduced-motion policy. Regression scenes cover fine patterns, a thin line and background crop/resize. Effect container tests cover stable identities, interruption and namespace isolation.
 
+New checks measure actual rear-content foreground contrast, Clear on white, protection over black/white input, zero idle sampling, independent edge illumination at zero bevel, continuous size response, pending-work cancellation, fresh-data readiness and context recovery. The interactive response example is exercised through real controls.
+
 Documentation checks verify page availability, navigation, generated reference tables and narrow-screen layout. The built package is loaded and rendered separately with `tools/check-package.mjs`. `tools/type-consumer.ts` compiles declarations in NodeNext mode independently of Vite.
 
 ## Hardware coverage
 
 The local hardware path is Windows, Edge / ANGLE D3D11 on Intel UHD Graphics (0x9B41). Set `CHROMIUM_PATH` to an installed Chromium-family browser and `LIQUID_GLASS_GPU=1` for hardware tests. CI repeats build and browser checks on Ubuntu/Chromium. The GitHub Actions result is authoritative for each commit.
 
-Windows WebView2 and Android WebView asset preparation are checked. Native SDK builds, Android GPU performance, HDR, energy use, long-duration thermal behavior and 120 Hz presentation are not validated by this suite. Numeric CPU/GPU agreement establishes consistency of the implemented equations, not identity with a proprietary renderer.
+Windows WebView2 and Android WebView asset preparation are checked. Native SDK builds, Android GPU performance, HDR, energy use, long-duration thermal behavior and 120 Hz presentation are not validated by this suite. The optional native SwiftUI reference fixture has not been compiled in this Windows environment. The capture/comparison tooling is tested with web images; no matched native optical or motion error has been measured. Numeric CPU/GPU agreement establishes consistency of the implemented equations, not identity with a proprietary renderer.
 
 ## Resource-constrained development
 

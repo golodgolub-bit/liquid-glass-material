@@ -52,6 +52,9 @@ uniform vec3 physical; // ior, environment reflection, corner power
 uniform vec2 medium; // surrounding IOR, Vd (0 disables Cauchy dispersion)
 uniform vec3 absorption; // Beer-Lambert extinction per CSS pixel
 uniform float edgeWidth;uniform float edgeLimit;uniform float bevelStrength;uniform float edgeContrast;
+uniform vec4 edgeFinish; // specular intensity/width, shadow radius/offset
+uniform vec2 diffusion; // effective scatter radius, ambient spill
+uniform vec4 readability; // protective RGB and opacity
 uniform sampler2D environmentMap;uniform float hasEnvironment;uniform float environmentRotation;
 uniform vec4 mode; // clear, appearance (-1 auto, 0 light, 1 dark), reduced transparency, contrast
 uniform vec4 touch; // x,y, press, impulse
@@ -136,11 +139,11 @@ void main() {
     vec4 ink=texture(surfaceContent,vec2(local.x,1.0-local.y));
     float alpha=ink.a*coverage*clamp(boundary.w,0.0,1.0);color=vec4(ink.rgb*alpha,alpha);return;
   }
-  float shadowDistance = d - boundary.z * 1.5;
+  float shadowDistance = d - boundary.z * edgeFinish.w;
   float presence = clamp(boundary.w, 0.0, 1.0);
-  float shadow = exp(-max(shadowDistance, 0.0) / 5.0) * finish.z * (1.0 - coverage) * presence;
-  if (d > 38.0) discard;
-  if (coverage < 0.001) { color = vec4(vec3(0.015, 0.022, 0.04) * shadow, shadow); return; }
+  float shadow = exp(-max(shadowDistance, 0.0) / max(edgeFinish.z,.1)) * finish.z * (1.0 - coverage) * presence;
+  if (d > max(38.0,edgeFinish.z*6.0+edgeFinish.w)) discard;
+  if (coverage < 0.001) {vec3 shadowColor=mix(vec3(.015,.022,.04),texture(blurred,uv).rgb*.16,diffusion.y);color = vec4(shadowColor * shadow, shadow); return; }
   vec2 grad = boundary.yz;
   float gradientLength=length(grad);
   vec2 n = grad / max(gradientLength, 0.0001);
@@ -171,17 +174,20 @@ void main() {
   float frost = mix(optics.w, max(optics.w, 0.94), mode.z);
   vec3 nearScatter=texture(blurred,refractUV).rgb;
   vec3 wideScatter=texture(scatteredWide,refractUV).rgb;
-  vec3 scattered=mix(nearScatter,wideScatter,smoothstep(0.35,1.0,frost)),ambient=texture(blurred,uv).rgb;
+  float nearWeight=clamp(diffusion.x*diffusion.x/36.0,0.0,1.0),wideWeight=clamp((diffusion.x*diffusion.x-36.0)/108.0,0.0,1.0);
+  vec3 scattered=mix(mix(transmitted,nearScatter,nearWeight),wideScatter,wideWeight),ambient=texture(blurred,uv).rgb;
   float lum = luma(ambient);
   float dark = mode.y < -0.5 ? 1.0 - smoothstep(0.25, 0.55, lum) : mode.y;
   // Roughness suppresses the sharp image instead of leaving a second sharp ghost.
-  vec3 c = mix(transmitted, scattered, smoothstep(0.0,0.52,frost));
+  float scatterAmount=(1.0-exp(-6.0*frost*frost))/(1.0-exp(-6.0));
+  vec3 c = mix(transmitted, scattered, scatterAmount);
   vec3 internalRay=refract(incident,opticalNormal,medium.x/physical.x);
   float opticalPath=optics.x/max(abs(internalRay.z),.05);
   c*=exp(-absorption*opticalPath*presence);
   c=applyScrollEdge(c,refractUV);
   c = mix(vec3(luma(c)), c, finish.x);
   float regular = 1.0 - mode.x;
+  c+=(ambient-vec3(luma(ambient)))*diffusion.y*.08*regular;
   vec3 body = mix(vec3(0.96,0.97,0.99), vec3(0.07,0.085,0.11), dark);
   c = mix(c, body, regular * (0.08 + 0.06 * frost));
   c = mix(c, body, mode.z * 0.72); c *= 1.0 - finish.w;
@@ -203,7 +209,10 @@ void main() {
   // A sub-pixel contrast contour defines the silhouette without embossing a rim.
   c*=1.0-exp(-depth*2.8)*edgeContrast*presence;
   c+=vec3(1.0,0.985,0.96)*(keyGlare+fillGlare*0.4)*bezel*finish.y*0.03*bevelStrength;
-  c+=rim*(0.025*bevelStrength+pow(max(facing,0.0),6.0)*mix(.035,.16,bevelStrength))*finish.y;
+  float specularRim=exp(-depth/max(edgeFinish.y,.1));
+  float edgeLight=pow(max(facing,0.0),8.0)+pow(max(-facing,0.0),12.0)*.32;
+  c+=vec3(1.0,.985,.96)*specularRim*edgeLight*edgeFinish.x*finish.y*.8;
+  c+=rim*.025*bevelStrength*finish.y;
   c-=rim*pow(max(-facing,0.0),2.0)*0.12*finish.y*bevelStrength;
   // A broad response under the finger, without periodic water ripples.
   float glow=exp(-distance(p,touch.xy)/95.0)*touch.z;
@@ -216,5 +225,6 @@ void main() {
   if (mode.w > 0.5) c = mix(body, mix(vec3(0.02),vec3(1.0),dark), rim);
   c = mix(texture(backdrop, uv).rgb, c, presence);
   c=glassShade(c,p,refractUV,opticalNormal,depth);
+  c=mix(c,readability.rgb,readability.a*presence);
   color = vec4(clamp(c,0.0,1.0) * coverage, coverage);
 }`;

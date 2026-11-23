@@ -6,12 +6,13 @@ const cache=join(process.env.LOCALAPPDATA ?? '','ms-playwright');
 const installed=existsSync(cache)?readdirSync(cache).filter(n=>n.startsWith('chromium_headless_shell-')).sort().reverse().map(n=>join(cache,n,'chrome-headless-shell-win64','chrome-headless-shell.exe')).find(existsSync):undefined;
 const software=process.argv.includes('--software');
 const hardware=process.argv.includes('--d3d11'),spectral=process.argv.includes('--spectral');
+const readability=!process.argv.includes('--no-readability');
 const edge='C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH ?? (hardware && existsSync(edge)?edge:installed),headless:true,args:software?['--use-angle=swiftshader','--enable-unsafe-swiftshader']:hardware?['--use-angle=d3d11','--ignore-gpu-blocklist']:[]});
 try {
   const page=await browser.newPage({viewport:{width:960,height:640}});
   await page.goto('http://127.0.0.1:5173/tests/harness.html');
-  const result=await page.evaluate(async(spectral)=> {
+  const result=await page.evaluate(async({spectral,readability})=> {
     const {GlassRenderer}=await import('/src/index.ts');
     window.testGlass.renderer.dispose();document.body.innerHTML='';
     const quantile=(values,p)=> {const a=[...values].sort((a,b)=>a-b);return a.length?a[Math.min(a.length-1,Math.floor(a.length*p))]:null;};
@@ -21,7 +22,7 @@ try {
     const device=info?gl.getParameter(info.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER);
     const source=document.createElement('canvas');source.width=800;source.height=500;
     const ctx=source.getContext('2d'),g=ctx.createLinearGradient(0,0,800,500);g.addColorStop(0,'#becee5');g.addColorStop(1,'#f7bca5');ctx.fillStyle=g;ctx.fillRect(0,0,800,500);
-    const renderer=new GlassRenderer(canvas,{maxPixelRatio:1,measureGpu:true});renderer.resize(800,500);renderer.setBackdrop(source);
+    const renderer=new GlassRenderer(canvas,{maxPixelRatio:1,measureGpu:true,readability});renderer.resize(800,500);renderer.setBackdrop(source);
     const results=[];
     for(const [count,layout] of [[1,'grid'],[8,'grid'],[24,'grid'],[3,'stack'],[8,'stack']]) {
       const surfaces=[];
@@ -44,8 +45,8 @@ try {
     }
     await new Promise(r=>setTimeout(r,1000));const before=renderer.stats.frames;await new Promise(r=>setTimeout(r,400));const idleFrames=renderer.stats.frames-before;
     renderer.dispose();return {device,baselineRafMedianMs:quantile(baseline,.5),baselineRafP95Ms:quantile(baseline,.95),results,idleFrames};
-  },spectral);
-  const report={recordedAt:new Date().toISOString(),softwareRequested:software,hardwareRequested:hardware,spectralDispersion:spectral,...result};
-  await mkdir('artifacts',{recursive:true});await writeFile(`artifacts/benchmark-${software?'software':hardware?'hardware':'default'}${spectral?'-spectral':''}.json`,JSON.stringify(report,null,2));
+  },{spectral,readability});
+  const report={recordedAt:new Date().toISOString(),softwareRequested:software,hardwareRequested:hardware,spectralDispersion:spectral,readability,...result};
+  await mkdir('artifacts',{recursive:true});await writeFile(`artifacts/benchmark-${software?'software':hardware?'hardware':'default'}${spectral?'-spectral':''}${readability?'':'-no-readability'}.json`,JSON.stringify(report,null,2));
   console.log(JSON.stringify(report,null,2));
 } finally {await browser.close();}

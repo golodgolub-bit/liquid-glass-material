@@ -19,7 +19,7 @@ test('namespaces isolate IDs, unions validate atomically, matched geometry diffe
     void a.reconcile([{id:'one',rect},{id:'two',rect:{...rect,x:110}}]);const matched=a.get('two')!.rect.x;
     void a.reconcile([{id:'one',rect},{id:'two',rect:{...rect,x:110}},{id:'three',transition:'materialize',rect:{...rect,x:210}}]);const materialize=a.get('three')!.rect.x;
     let rejected=false;try{await a.reconcile([{id:'one',rect},{id:'one',rect}]);}catch{rejected=true;}
-    a.material({variant:'clear'},false);const frost=a.get('one')!.state.material.frost;
+    a.material({variant:'clear'},false);const frost=a.get('one')!.state.baseMaterial.frost;
     const count=a.size,isolated=a.get('one')!.id!==b.get('one')!.id;
     a.dispose();b.dispose();return{matched,materialize,rejected,count,isolated,frost};
   });expect(result.matched).toBe(20);expect(result.materialize).toBe(210);expect(result.rejected).toBe(true);expect(result.count).toBe(3);expect(result.isolated).toBe(true);expect(result.frost).toBe(.08);

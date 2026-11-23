@@ -13,8 +13,15 @@ try{
   for(const scene of['paper','spectrum','interfaces']){
     await page.goto(new URL(`/examples/gallery/?scene=${scene}&capture=1`,process.env.LIQUID_GLASS_URL??'http://127.0.0.1:5173').href);
     await page.waitForFunction(()=>window.glassGallery?.renderer.stats.frames>0);
+    await page.evaluate(async()=>{const g=window.glassGallery;await Promise.all(['0','1','2'].map(id=>g.effects.get(id)?.contrastReady()));await Promise.all(['0','1','2'].map(id=>g.effects.get(id)?.settled()));});
     await page.locator('canvas').screenshot({path:`docs/images/${scene}.jpg`,type:'jpeg',quality:92});
     console.log(`Captured docs/images/${scene}.jpg from the real renderer`);
   }
+  await page.goto(new URL('/examples/readability/',process.env.LIQUID_GLASS_URL??'http://127.0.0.1:5173').href);
+  await page.waitForFunction(()=>!!window.glassReadability);
+  await page.evaluate(async()=>{const g=window.glassReadability;await Promise.all([g.front,g.clear,g.dimmed,g.panel].map(s=>s.contrastReady()));await Promise.all([g.front,g.clear,g.dimmed,g.panel].map(s=>s.settled()));});
+  await page.locator('.study').screenshot({path:'docs/images/response.jpg',type:'jpeg',quality:92});
+  const measurements=await page.evaluate(()=>{const g=window.glassReadability;return Object.fromEntries(['front','clear','dimmed','panel'].map(id=>[id,{foreground:g[id].foreground,contrast:g[id].state.contrast,material:g[id].state.material}]));});
+  await writeFile('artifacts/readability-v0.8.json',JSON.stringify(measurements,null,2));console.log('Captured docs/images/response.jpg and measured contrast states');
 }finally{await browser.close();await writeFile('artifacts/gallery-errors.json',JSON.stringify(errors,null,2));}
 if(errors.length)throw new Error(errors.join('\n'));

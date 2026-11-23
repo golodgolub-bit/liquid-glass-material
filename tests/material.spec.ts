@@ -64,12 +64,13 @@ test('stacked contours and local content survive context restoration',async({pag
   await page.evaluate(async()=>{
     const module='/src/index.ts',{createGlassShape}=await import(module),t=(window as any).testGlass;
     const ink=document.createElement('canvas');ink.width=ink.height=100;const c=ink.getContext('2d')!;c.fillStyle='#08e';c.fillRect(10,20,80,40);
-    t.renderer.addSurface({id:'rear-content',rect:{x:40,y:40,width:180,height:140,radius:20},content:ink});
-    t.renderer.addSurface({id:'front-path',layer:1,rect:{x:100,y:60,width:120,height:140,radius:20},shape:createGlassShape({path:'M 50 5 L 95 50 L 50 95 L 5 50 Z'}),material:{variant:'clear',frost:.05}});
+    const rear=t.renderer.addSurface({id:'rear-content',rect:{x:40,y:40,width:180,height:140,radius:20},content:ink});
+    const front=t.renderer.addSurface({id:'front-path',layer:1,rect:{x:100,y:60,width:120,height:140,radius:20},shape:createGlassShape({path:'M 50 5 L 95 50 L 50 95 L 5 50 Z'}),material:{variant:'clear',frost:.05}});
+    (window as any).restoreSurfaces=[rear,front];await Promise.all([rear.contrastReady(),front.contrastReady()]);await Promise.all([rear.settled(),front.settled()]);
     (window as any).previous=await t.capture();(window as any).restoreExtension=document.querySelector('canvas')!.getContext('webgl2')!.getExtension('WEBGL_lose_context');(window as any).restoreExtension.loseContext();
   });
   await expect(page.locator('canvas')).toHaveAttribute('data-glass-context','lost');await page.evaluate(()=>(window as any).restoreExtension.restoreContext());await expect(page.locator('canvas')).toHaveAttribute('data-glass-context','ready');
-  const delta=await page.evaluate(async()=>{const t=(window as any).testGlass,after=await t.capture(),before=(window as any).previous;return after.reduce((sum:number,n:number,i:number)=>sum+Math.abs(n-before[i]),0)/after.length;});expect(delta).toBeLessThan(.1);
+  const delta=await page.evaluate(async()=>{await Promise.all((window as any).restoreSurfaces.map((s:any)=>s.contrastReady()));await Promise.all((window as any).restoreSurfaces.map((s:any)=>s.settled()));const t=(window as any).testGlass,after=await t.capture(),before=(window as any).previous;return after.reduce((sum:number,n:number,i:number)=>sum+Math.abs(n-before[i]),0)/after.length;});expect(delta).toBeLessThan(.1);
 });
 
 test('an overlay renderer composites glass layers but leaves the exterior transparent',async({page})=>{

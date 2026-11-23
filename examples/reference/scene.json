@@ -1,0 +1,11 @@
+{
+  "width": 960,
+  "height": 640,
+  "surfaces": [
+    {"id":"regular-light","variant":"regular","x":60,"y":90,"width":340,"height":100,"radius":36},
+    {"id":"clear-light","variant":"clear","x":60,"y":250,"width":340,"height":100,"radius":50},
+    {"id":"regular-dark","variant":"regular","x":560,"y":90,"width":340,"height":100,"radius":36},
+    {"id":"clear-dark","variant":"clear","x":560,"y":250,"width":340,"height":100,"radius":50},
+    {"id":"regular-panel","variant":"regular","x":150,"y":430,"width":660,"height":160,"radius":36}
+  ]
+}

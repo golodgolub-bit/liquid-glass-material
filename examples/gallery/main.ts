@@ -3,8 +3,8 @@ const canvas=document.querySelector('canvas')!,handle=document.querySelector<HTM
 const params=new URLSearchParams(location.search),scenes=['paper','spectrum','interfaces'];
 if(params.has('capture'))document.documentElement.classList.add('capture');
 const renderer=new GlassRenderer(canvas,{maxPixelRatio:1}),backdrop=document.createElement('canvas');
-const lens=renderer.addSurface({id:'gallery-lens',rect:{x:440,y:415,width:560,height:144,radius:72},material:{variant:'clear',appearance:'light',frost:.025,thickness:22,refraction:19,edgeWidth:15,bevel:0,edgeContrast:.12,highlight:.5,reflection:.16,abbeNumber:58},vibrancy:true});
-const effects=new GlassEffectContainer(renderer,{namespace:'gallery-controls',spacing:24,layer:-1,material:{appearance:'light',frost:.4,edgeWidth:10,edgeContrast:.12}});
+const lens=renderer.addSurface({id:'gallery-lens',sizeAdaptation:false,contrast:false,rect:{x:440,y:415,width:560,height:144,radius:72},material:{variant:'clear',appearance:'light',frost:.025,thickness:22,refraction:19,edgeWidth:15,bevel:0,edgeContrast:.12,highlight:.5,reflection:.16,abbeNumber:58},vibrancy:true});
+const effects=new GlassEffectContainer(renderer,{namespace:'gallery-controls',sizeAdaptation:false,spacing:24,layer:-1,material:{appearance:'light',frost:.4,edgeWidth:10,edgeContrast:.12}});
 let scene=params.get('scene')??'paper',expanded=true;
 const font=(c:CanvasRenderingContext2D,size:number,family='Georgia',weight=400)=>{c.font=`${weight} ${size}px ${family}`;};
 function tracked(c:CanvasRenderingContext2D,text:string,x:number,y:number,spacing=3){for(const character of text){c.fillText(character,x,y);x+=c.measureText(character).width+spacing;}}

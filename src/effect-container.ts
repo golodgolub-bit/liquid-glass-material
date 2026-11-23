@@ -3,6 +3,8 @@ import {createMaterial,type GlassMaterial} from './material.js';
 import {validateRect,type Rect} from './geometry.js';
 import {createPhysics,type PhysicsOptions} from './physics.js';
 import type {GlassShape} from './shape.js';
+import type{SizeAdaptation}from'./size-adaptation.js';
+import type{ContrastSettings}from'./contrast.js';
 import type {MotionResult} from './motion.js';
 
 export type GlassEffectTransition='matchedGeometry'|'materialize'|'identity';
@@ -12,7 +14,7 @@ export interface GlassEffectItem {
 }
 export interface GlassEffectContainerOptions {
   namespace?:string;spacing?:number;layer?:number;vibrancy?:boolean;
-  material?:Partial<GlassMaterial>;physics?:PhysicsOptions;transition?:GlassEffectTransition;
+  material?:Partial<GlassMaterial>;physics?:PhysicsOptions;transition?:GlassEffectTransition;contrast?:ContrastSettings|false;sizeAdaptation?:Partial<SizeAdaptation>|false;
 }
 interface Entry {surface:SurfaceHandle;item:GlassEffectItem;revision:number;exiting:boolean}
 let sequence=0;
@@ -60,7 +62,7 @@ export class GlassEffectContainer {
       let entry=this.entries.get(item.id);
       if(!entry){
         const source=animate&&transition==='matchedGeometry'?this.nearest(item.rect,previous,item.union):null;
-        const surface=this.renderer.addSurface({id:JSON.stringify([this.namespace,item.id]),group:JSON.stringify([this.namespace,'union',item.union??'']),spacing:this.options.spacing,layer:this.options.layer,vibrancy:this.options.vibrancy,material:this.options.material,physics:this.options.physics,rect:source??item.rect,shape:item.shape??undefined,content:item.content??undefined,interactive:item.interactive,materialize:animate,elastic:false});
+        const surface=this.renderer.addSurface({id:JSON.stringify([this.namespace,item.id]),group:JSON.stringify([this.namespace,'union',item.union??'']),spacing:this.options.spacing,layer:this.options.layer,vibrancy:this.options.vibrancy,material:this.options.material,physics:this.options.physics,contrast:this.options.contrast,sizeAdaptation:this.options.sizeAdaptation,rect:source??item.rect,shape:item.shape??undefined,content:item.content??undefined,interactive:item.interactive,materialize:animate,elastic:false});
         entry={surface,item:{...item,rect:{...item.rect}},revision:0,exiting:false};this.entries.set(item.id,entry);
       }else{
         if(item.shape!==entry.item.shape)entry.surface.shape(item.shape??null,{immediate:!animate});

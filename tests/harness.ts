@@ -4,7 +4,7 @@ source.width = 320; source.height = 240;
 const ctx = source.getContext('2d')!;
 for(let x=0;x<320;x++) { ctx.fillStyle = `rgb(${x/320*255},${x%32<16?230:20},120)`; ctx.fillRect(x,0,1,240); }
 const renderer = new GlassRenderer(canvas,{maxPixelRatio:1}); renderer.resize(320,240); renderer.setBackdrop(source);
-const surface = renderer.addSurface({id:'test',rect:{x:80,y:70,width:160,height:100,radius:35},material:createMaterial({variant:'identity'})});
+const surface = renderer.addSurface({id:'test',contrast:false,sizeAdaptation:false,rect:{x:80,y:70,width:160,height:100,radius:35},material:createMaterial({variant:'identity'})});
 function capture(): Promise<number[]> {
   return new Promise(resolve=> {
     const unsubscribe = renderer.subscribe(()=> {

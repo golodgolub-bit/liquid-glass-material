@@ -8,16 +8,17 @@ A programmable WebGL 2 material for interfaces, applications and WebView hosts. 
 2. [Create a material](api.md#glassmaterial) and bind accessible DOM controls.
 3. [Coordinate effect identities and transitions](containers.md) in a shared container.
 4. [Refract and recolor text](text-under-glass.md) using an aligned foreground mask.
-5. [Program shaders and physics](programmability.md) or use the [ray optics helpers](ray-optics.md).
+5. [Adapt foreground contrast](readability.md) and [material size response](material-response.md).
+6. [Program shaders and physics](programmability.md) or use the [ray optics helpers](ray-optics.md).
 
-Run `npm install`, then `npm run dev`. Open `/` for the laboratory, `/examples/gallery/` for editorial material studies, `/examples/workbench/` for the live GLSL editor and `/examples/programmatic/` for continuous animation.
+Run `npm install`, then `npm run dev`. Open `/` for the laboratory, `/examples/gallery/` for editorial material studies, `/examples/workbench/` for the live GLSL editor and `/examples/programmatic/` for continuous animation. `/examples/readability/` exposes contrast and size behavior; `/examples/reference/` provides a fixed comparison fixture.
 
 ## Material capabilities
 
 | Area | Available features |
 |---|---|
 | Optics | Separate glass/surrounding indices, edge refraction, magnification, RGB dispersion, Cauchy/Abbe spectral indices, Beer–Lambert extinction |
-| Finish | Regular/Clear/Identity, independently controlled bevel and contour, adaptive light/dark tone, tint, saturation, dimming |
+| Finish | Regular/Clear/Identity, independent bevel, specular edge and contour, composited contrast, size response, tint, saturation, dimming |
 | Lighting | Directional highlights, Fresnel environment reflection, independent rotating reflection maps |
 | Composition | Rear glass and local content refracted by front layers, shared SDF unions, free SVG contours and holes |
 | Interaction | Press, grab, drag, lift, hover/focus highlights, selection lenses, keyboard support |
@@ -26,6 +27,9 @@ Run `npm install`, then `npm run dev`. Open `/` for the laboratory, `/examples/g
 
 ## Guides
 
+- [Composited contrast](readability.md): ink policies, GPU probes and Clear presets.
+- [Material response](material-response.md): size profiles, scattering and edge illumination.
+- [Matched captures](comparison.md): native/web fixtures and quantitative comparison protocol.
 - [API Reference](api.md): generated public signatures and units.
 - [Architecture](architecture.md): source capture, shared scattering and compositing.
 - [Motion](motion.md) and [Animation recipes](animations.md): spring channels and lifecycle.

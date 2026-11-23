@@ -16,7 +16,7 @@ surface.material({ reflection: 0.45, highlight: 0.6, ior: 1.52 });
 
 ## Keep optics and edge styling separate
 
-Optical normals determine refraction and Fresnel response. The decorative shading normal is controlled separately by `bevel`. With `bevel:0`, the material retains lensing without a raised bright rim. `edgeContrast` independently adjusts a narrow dark contour. A custom GLSL shader can replace either response entirely.
+Optical normals determine refraction and Fresnel response. The decorative shading normal is controlled separately by `bevel`. With `bevel:0`, the material retains lensing without raised bevel shading. `specularIntensity` and `specularWidth` independently retain a narrow illuminated edge. `edgeContrast` independently adjusts a narrow dark contour. A custom GLSL shader can replace either response entirely.
 
 The standard environment lookup is not a 3D reflection scene. It cannot show objects absent from the map, calculate geometric occlusion or reproduce native HDR/EDR highlights. RGB output is clamped to RGBA8. For a different lighting model, use `shade` or a complete fragment program.
 

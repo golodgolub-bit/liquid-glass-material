@@ -31,14 +31,16 @@ The mapping describes supported concepts, not a binary compatibility layer. UIKi
 | Scattering | Two cached Gaussian levels; no volumetric multiple-scattering simulation |
 | Reflection | Directional response and environment map; no complete reflected 3D scene |
 | Rear glass | Completed lower layers and their content feed front-layer refraction |
-| Edge | Refraction independent from bevel; narrow contrast contour independently adjustable |
+| Edge | Independent refraction, bevel, specular intensity/width and dark contour |
+| Readability | Composited regional GPU samples, automatic ink and bounded Regular protection |
+| Size response | Configurable continuous thickness, refraction, frost, scattering and shadow scaling |
 | Color | RGBA8/sRGB; HDR, EDR and native tone mapping are absent |
-| Ambient spill | No full spatial indirect-light transport or physical colored shadows |
+| Ambient spill | Local blurred-color surface/shadow approximation; no spatial indirect-light transport |
 | Motion | Analytic interruptible springs; coefficients are independently selected |
 | Free contours | 256×256 SVG distance fields; finite spatial resolution |
 | Background capture | Explicit source/capture integration; offscreen native pixels are not available automatically |
 
-Apple does not publish exact refractive indices, scattering kernels, private compositor behavior or spring constants for every system control in the sources listed below. An index such as 1.48 must not be described as an extracted Apple constant. Exact native equivalence requires measured reference scenes, matched display conditions and quantitative image/motion comparisons; passing implementation tests alone does not establish it.
+Apple does not publish exact refractive indices, scattering kernels, private compositor behavior or spring constants for every system control in the sources listed below. An index such as 1.48 must not be described as an extracted Apple constant. The [matched-capture fixture and protocol](comparison.md) provide a reproducible comparison path. Exact native equivalence requires measured reference scenes, matched display conditions and quantitative image/motion comparisons; passing implementation tests alone does not establish it.
 
 ## Primary references
 

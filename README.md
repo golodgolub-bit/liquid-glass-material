@@ -17,10 +17,11 @@ A shared GPU compositor for refractive surfaces, layered content and fluid contr
 ## More than a blur
 
 - **Optics:** independent thickness and refraction reach, glass/outside indices, magnification, Cauchy/Abbe RGB dispersion and Beer–Lambert absorption.
-- **Finish:** Regular, Clear and Identity; adaptive tone, tint, scattering, directional light and independent environment reflection. Raised bevel is off by default.
+- **Finish:** Regular, Clear and Identity; composited contrast, tint, size response, scattering, directional light and independent environment reflection. Raised bevel is off by default.
 - **Composition:** glass refracts completed rear glass and local content. Shared contours merge; SVG paths support free shapes, concavity, holes and interrupted morphs.
 - **Motion:** namespaced effect identities, unions, matched geometry, materialize transitions, configurable analytic springs, impulses and custom deformation.
 - **Interaction:** real grab/drag, selection lenses, hover/focus highlights, accessible controls, keyboard input and live accessibility preferences.
+- **Response:** asynchronous per-surface contrast probes, bounded Regular protection, auto ink for Clear, independent edge light and geometry-driven optical depth.
 - **Extension:** optics/field/shade hooks, complete fragment/scattering/background passes and typed uniforms with transactional compilation and context restoration.
 
 ## Material studies
@@ -41,6 +42,8 @@ Open `http://127.0.0.1:5173/` for the laboratory and motion studio. Additional r
 | Route | Purpose |
 |---|---|
 | `/examples/gallery/` | Interactive paper, typography and chromatic studies |
+| `/examples/readability/` | Rear-content contrast, Clear presets and size/edge response |
+| `/examples/reference/` | Fixed optical fixture with an optional native SwiftUI counterpart |
 | `/examples/workbench/` | Live optics, physical springs and GLSL editor |
 | `/examples/programmatic/` | Text recoloring, continuous motion and environment reflection |
 | `/docs/` | Complete English developer guide |
@@ -50,7 +53,7 @@ Open `http://127.0.0.1:5173/` for the laboratory and motion studio. Additional r
 Download the `.tgz` from [Releases](https://github.com/golodgolub-bit/liquid-glass-material/releases/latest), then install it:
 
 ```sh
-npm install ./liquid-glass-material-0.7.0.tgz
+npm install ./liquid-glass-material-0.8.0.tgz
 ```
 
 ```ts
@@ -73,6 +76,8 @@ renderer.dispose();
 ```
 
 The background is explicit application input. For media, use `bindMediaBackdrop`; for selected text/icons, provide an aligned foreground mask. Native background capture requires a host bridge. See [Integration](docs/integration.md) and [Text under glass](docs/text-under-glass.md).
+
+Read [Composited contrast](docs/readability.md) for foreground regions, sampled ratios and Clear backgrounds. [Material response](docs/material-response.md) explains size adaptation and independent edge controls.
 
 ## Coordinate related effects
 
