@@ -1,12 +1,18 @@
-import{test,expect}from'@playwright/test';
+import{test,expect,type Page}from'@playwright/test';
+async function openScene(page:Page,route:string,key:string){
+ let rejectFailure:(error:Error)=>void=()=>{};const failure=new Promise<never>((_,reject)=>{rejectFailure=reject;});
+ page.once('pageerror',rejectFailure);
+ try{await Promise.race([page.goto(route).then(()=>page.waitForFunction(name=>(window as any)[name]?.renderer.stats.frames>0,key)),failure]);}
+ finally{page.off('pageerror',rejectFailure);}
+}
 test('glyph contours, layered composition and interrupted panel transitions render without GPU errors',async({page})=>{
- const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/examples/interface-kit/index.html');await page.waitForFunction(()=>(window as any).interfaceKit?.renderer.stats.frames>0);
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await openScene(page,'/examples/interface-kit/index.html','interfaceKit');
  const initial=await page.evaluate(()=>{const k=(window as any).interfaceKit;return{count:k.clock.length,error:k.renderer.canvas.getContext('webgl2').getError()};});expect(initial).toEqual({count:5,error:0});
  await page.getByRole('button',{name:'Open Notes',exact:true}).click();await page.waitForFunction(()=>(window as any).interfaceKit.opened);await page.getByRole('button',{name:'Send behind clock',exact:true}).click();expect(await page.evaluate(()=>(window as any).interfaceKit.panel.state.layer)).toBe(1);
  await page.keyboard.press('Escape');await page.waitForFunction(()=>!(window as any).interfaceKit.opened);await page.getByRole('button',{name:'Compact clock',exact:true}).click();await expect(page.getByRole('button',{name:'Compact clock',exact:true})).toHaveAttribute('aria-pressed','true');expect(errors).toEqual([]);
 });
 test('switch semantics, focus and reduced-transparency behavior survive the browser engine',async({page})=>{
- await page.goto('/examples/controls/index.html');await page.waitForFunction(()=>(window as any).glassControls?.renderer.stats.frames>0);const toggle=page.getByRole('switch',{name:'Preview connection',exact:true});await toggle.focus();await page.keyboard.press('Space');await expect(toggle).not.toBeChecked();await page.getByRole('checkbox',{name:'Right to left',exact:true}).check();await page.evaluate(()=>(window as any).glassControls.renderer.setAccessibility({reducedMotion:true,reducedTransparency:true}));
+ await openScene(page,'/examples/controls/index.html','glassControls');const toggle=page.getByRole('switch',{name:'Preview connection',exact:true});await toggle.focus();await page.keyboard.press('Space');await expect(toggle).not.toBeChecked();await page.getByRole('checkbox',{name:'Right to left',exact:true}).check();await page.evaluate(()=>(window as any).glassControls.renderer.setAccessibility({reducedMotion:true,reducedTransparency:true}));
  await page.evaluate(()=>(window as any).glassControls.preview.setPressed(true));expect(await page.evaluate(()=>(window as any).glassControls.preview.surface.state.contentOpacity)).toBe(1);expect(await page.evaluate(()=>(window as any).glassControls.renderer.canvas.getContext('webgl2').getError())).toBe(0);
 });
 test('static documentation and version metadata remain accessible on mobile width',async({page})=>{
