@@ -1,19 +1,21 @@
-<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Материал и физика · Liquid Glass</title><link rel="stylesheet" href="./style.css"></head><body><main>
-<header><a href="../../docs/">liquid glass / документация</a><span>DEVELOPER WORKBENCH</span></header>
-<h1>Материал под вашим управлением.</h1><p class="intro">Оптическая функция, рассеивание и движение открыты для программирования. Меняйте физику, заменяйте GLSL, проверяйте результат на линиях и тексте. Это стенд независимой модели, а не доказательство совпадения с Apple.</p>
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Material and physics · Liquid Glass</title><link rel="stylesheet" href="./style.css"></head><body><main>
+<header><a href="../../docs/">liquid glass / documentation</a><span>DEVELOPER WORKBENCH</span></header>
+<h1>The material is yours to program.</h1><p class="intro">Program the optics, scattering and motion. Tune the physics, replace GLSL, and inspect the result against fine lines and typography.</p>
 <div class="workspace"><aside>
-<fieldset><legend>Оптика</legend><label>Модель<select id="model" aria-label="Модель"><option value="screen">Экранная линза</option><option value="slab">Луч через две границы</option><option value="custom">Своя GLSL-функция</option></select></label>
-<label>Показатель преломления <output id="ior-value">1.48</output><input id="ior" aria-label="Показатель преломления" type="range" min="1" max="2.5" step="0.01" value="1.48"></label>
-<label>Сила искажения <output id="gain-value">1.00</output><input id="gain" aria-label="Сила искажения" type="range" min="0" max="2" step="0.05" value="1"></label>
-<label>Расстояние до фона <output id="gap-value">4</output><input id="gap" aria-label="Расстояние до фона" type="range" min="0" max="24" step="1" value="4"></label></fieldset>
-<fieldset><legend>Пружина движения</legend>
-<label>Масса <output id="mass-value">1.0</output><input id="mass" aria-label="Масса" type="range" min="0.2" max="4" step="0.1" value="1"></label>
-<label>Жёсткость <output id="stiffness-value">480</output><input id="stiffness" aria-label="Жёсткость" type="range" min="40" max="1200" step="10" value="480"></label>
-<label>Затухание <output id="damping-value">39</output><input id="damping" aria-label="Затухание" type="range" min="2" max="100" step="1" value="39"></label>
-<label class="check"><input type="checkbox" id="deform">Своя функция деформации</label>
-<div class="actions"><button id="kick">Приложить импульс</button><button id="play" aria-pressed="false">Движение</button></div></fieldset>
-<p class="hint">Зажмите линзу и перемещайте её. Во время захвата действует быстрая пружина, после отпускания возвращается ваша настройка.</p>
-</aside><section class="preview"><div class="stage"><canvas aria-hidden="true"></canvas><button class="lens" aria-label="Перетащить линзу"></button><span class="caption">DRAG · REFRACT · REPROGRAM</span></div><output id="stats"></output><p class="mode-note" id="mode-note">Экранная оптическая модель. Выпуклая фаска выключена.</p>
-<details><summary>Редактор оптической функции · GLSL</summary><p>Доступны <code>data</code>, <code>defaultGlassOptics</code>, <code>traceSlab</code> и uniforms <code>uGlass_gain / uGlass_gap</code>. Изменение uniforms не перекомпилирует программу.</p><textarea id="code" aria-label="GLSL оптической функции" spellcheck="false"></textarea><div class="actions"><button id="apply">Применить GLSL</button><button id="reset">Восстановить стандартный шейдер</button></div></details>
-<output id="status" role="status">Готово. Шейдер компилируется только при смене кода.</output></section></div>
-<footer><a href="../../docs/programmability.html">API шейдеров и физики →</a><a href="../../docs/apple-audit.html">Что подтверждено сравнением с Apple →</a></footer></main><script type="module" src="./main.ts"></script></body></html>
+<fieldset><legend>Optics</legend><label>Model<select id="model" aria-label="Model"><option value="screen">Screen-space lens</option><option value="slab">Two-interface ray</option><option value="custom">Custom GLSL function</option></select></label>
+<label>Refractive index <output id="ior-value">1.48</output><input id="ior" aria-label="Refractive index" type="range" min="1" max="2.5" step="0.01" value="1.48"></label>
+<label>Surrounding index <output id="outside-value">1.00</output><input id="outside" aria-label="Surrounding index" type="range" min="1" max="2.5" step="0.01" value="1"></label>
+<label>Abbe number <output id="abbe-value">0</output><input id="abbe" aria-label="Abbe number" type="range" min="0" max="100" step="5" value="0"></label>
+<label>Distortion gain <output id="gain-value">1.00</output><input id="gain" aria-label="Distortion gain" type="range" min="0" max="2" step="0.05" value="1"></label>
+<label>Backdrop distance <output id="gap-value">4</output><input id="gap" aria-label="Backdrop distance" type="range" min="0" max="24" step="1" value="4"></label></fieldset>
+<fieldset><legend>Motion spring</legend>
+<label>Mass <output id="mass-value">1.0</output><input id="mass" aria-label="Mass" type="range" min="0.2" max="4" step="0.1" value="1"></label>
+<label>Stiffness <output id="stiffness-value">480</output><input id="stiffness" aria-label="Stiffness" type="range" min="40" max="1200" step="10" value="480"></label>
+<label>Damping <output id="damping-value">39</output><input id="damping" aria-label="Damping" type="range" min="2" max="100" step="1" value="39"></label>
+<label class="check"><input type="checkbox" id="deform">Custom deformation</label>
+<div class="actions"><button id="kick">Apply impulse</button><button id="play" aria-pressed="false">Motion</button></div></fieldset>
+<p class="hint">Hold and drag the lens. A responsive spring follows the pointer; releasing restores your configured spring.</p>
+</aside><section class="preview"><div class="stage"><canvas aria-hidden="true"></canvas><button class="lens" aria-label="Drag the lens"></button><span class="caption">DRAG · REFRACT · REPROGRAM</span></div><output id="stats"></output><p class="mode-note" id="mode-note">Screen-space optical model. Raised bevel is disabled.</p>
+<details><summary>Optical function editor · GLSL</summary><p>Available: <code>data</code>, <code>defaultGlassOptics</code>, <code>traceSlab</code> and uniforms <code>uGlass_gain / uGlass_gap</code>. Updating uniforms does not recompile the program.</p><textarea id="code" aria-label="Optical function GLSL" spellcheck="false"></textarea><div class="actions"><button id="apply">Apply GLSL</button><button id="reset">Restore default shader</button></div></details>
+<output id="status" role="status">Ready. Shaders compile only when the code changes.</output></section></div>
+<footer><a href="../../docs/programmability.html">Shader and physics API →</a><a href="../../docs/apple-audit.html">Platform compatibility →</a></footer></main><script type="module" src="./main.ts"></script></body></html>

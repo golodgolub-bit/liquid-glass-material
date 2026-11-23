@@ -32,3 +32,6 @@ menu.dispose();search.dispose();navigation.dispose();
 toggle.setChecked(false);
 toggle.dispose();
 renderer.dispose();
+
+import {GlassEffectContainer,spectralIndices,absorptionFromTransmittance} from '../dist/index.js';
+const effects=new GlassEffectContainer(renderer,{namespace:"typed"});void effects.reconcile([{id:"a",rect:{x:0,y:0,width:80,height:40,radius:20}}]);effects.material({abbeNumber:58,outsideIor:1,absorption:absorptionFromTransmittance([.9,1,1],20)});void spectralIndices(1.52,58);effects.dispose();

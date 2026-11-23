@@ -8,6 +8,7 @@ export type{GlassPhysics,PhysicsOptions,PhysicsChannel,DeformationState,Deformat
 export {createGlassShader,shaderSources}from'./shader-program.js';
 export type{GlassShader,GlassShaderOptions,ShaderUniform,ShaderValue}from'./shader-program.js';
 export {refractRay,fresnelReflectance,traceSlabRay,sampleGlassOptics,slabOpticsGLSL}from'./optics.js';
+export {spectralWavelengths,refractiveIndexAtWavelength,spectralIndices,absorptionFromTransmittance}from'./optics.js';
 export type{Vec2,Vec3,SlabRay,SlabRayOptions,OpticalProbe}from'./optics.js';
 export type { MotionOptions, MotionResult, SpringOptions } from './motion.js';
 export {GlassAnimation} from './animation.js';
@@ -17,6 +18,8 @@ export type { GlassMaterial, Quality, Appearance, RGB } from './material.js';
 export { Spring } from './spring.js';
 export { roundedRectDistance, smoothUnion } from './geometry.js';
 export type { Rect } from './geometry.js';
+export {GlassEffectContainer}from'./effect-container.js';
+export type{GlassEffectItem,GlassEffectTransition,GlassEffectContainerOptions}from'./effect-container.js';
 export {createGlassShape} from './shape.js';
 export type {GlassShape} from './shape.js';
 export { bindElement, observeSize } from './dom.js';

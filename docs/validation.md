@@ -1,52 +1,28 @@
-# Проверки сборки
+# Validation
 
-## v0.6.0
+Local v0.7 verification passed **21 unit tests and 48 browser checks** on the hardware path below. NodeNext declarations, built ESM rendering, demo and host-asset builds are checked separately.
 
-23 ноября 2026 года, Windows, Edge / ANGLE D3D11, Intel UHD Graphics (0x9B41).
+## Automated checks
 
-- TypeScript, ESM и declarations — успешно; 19 unit-тестов и 43 браузерные проверки — успешно.
-- Новые проверки: CPU/GPU результаты экранной оптики и луча через две границы, Snell/Fresnel/TIR, клиновидная выходная плоскость, физические параметры пружины, многосекундный аналитический шаг.
-- Реальные GPU-пиксели: замена GLSL и uniforms, rollback ошибочной компиляции, пользовательский blur, восстановление GPU-контекста с последними uniforms.
-- Деформация согласована с hit testing и Reduced Motion; затухающие колебания материала не выводят GPU-параметры за допустимые оптические диапазоны. Скрытая поверхность не перехватывает попадания.
-- Живой workbench: смена модели, физики и кода; ошибка GLSL сохраняет прежний рабочий материал.
-
-Сопоставление с iPadOS 27 и незакрытые различия — в [apple-audit.md](apple-audit.md). Численные проверки собственных моделей не устанавливают тождество алгоритму Apple.
-
-## v0.5.1
-
-- TypeScript, сборка ESM/declarations и 12 unit-тестов — успешно.
-- 35 браузерных проверок на Edge / D3D11 — успешно. Новая проверка подтверждает независимость оптического преломления и фаски: плоская середина на однотонном фоне, искажение полос при `bevel:0`, отдельное включение выпуклости.
-- Старт и возобновление программы в живом примере используют пружинное назначение позиции, чтобы после ручного перемещения не было скачка к синусоидальной траектории.
-
-## v0.5.0
-
-23 ноября 2026 года, Windows, Edge / ANGLE D3D11 на Intel UHD Graphics (0x9B41).
-
-- TypeScript, ESM, CSS, declarations и отдельный NodeNext consumer — успешно.
-- 12 unit-тестов и 34 браузерные проверки — успешно. Проверены реальные shader/pixel paths, захват и перетаскивание, композиция слоёв, свободные контуры, текст под линзой, полосы/сетка, контекст GPU, остановка в покое, Reduced Motion, программируемые анимации и независимые отражения.
-- Документация: переходы между страницами и живым примером, таблицы API, поиск и отсутствие горизонтального переполнения на ширине 360 px.
-- Пример `examples/programmatic/main.ts` включён в проверку TypeScript.
-
-Показатели и ограничения измерений — в [performance.md](performance.md). GitHub workflow повторяет сборку и тесты на Chromium; наличие workflow само по себе не означает успешный запуск CI.
-
-## Историческая проверка v0.2.0
-
-Локальная проверка 22–23 ноября 2026 года на Windows, Intel UHD Graphics (0x9B41), Edge 157 и ANGLE/D3D11.
-
-- `npm run build:hosts`: TypeScript, ESM, CSS, declarations и копирование актуальных ресурсов в примеры Windows/Android — успешно.
-- `npm test`: 12 тестов — успешно.
-- `npm run test:browser` с `CHROMIUM_PATH` на Edge и `LIQUID_GLASS_GPU=1`: все 14 тестов — успешно. В том числе настоящее pointer drag, клавиатура, пиксели GPU, прерывание перехода, context loss/restore, Reduced Motion, живой HTML-in-Canvas и отсутствие повторных upload в покое.
-- `npm run build:demo` и `tools/record-motion.mjs` на production preview: все девять сцен дошли до завершения без runtime-ошибок. Проверка production выявила исключение CSS контролов при tree shaking; явный импорт стилей исправляет его. Запись: `artifacts/motion-showcase.webm`, длительность около 35 секунд.
-- Отдельная компиляция `tools/type-consumer.ts` с NodeNext проверяет declarations без Vite/Bundler module resolution.
-
-Для воспроизведения аппаратных тестов в PowerShell:
-
-```powershell
-$env:CHROMIUM_PATH='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
-$env:LIQUID_GLASS_GPU='1'
-npm run test:browser
+```sh
+npm run check
+npm run build:demo
+npm run build:hosts
+npm pack --dry-run
 ```
 
-Тесты работают одним worker. При недостатке памяти можно задать `NODE_OPTIONS='--max-old-space-size=192 --max-semi-space-size=2'` и запускать сборку, браузерные тесты и запись последовательно. Показатели производительности и контрольный пустой requestAnimationFrame находятся в [performance.md](performance.md).
+The unit suite verifies spring integration, retargeting, physical spring conversion, geometry, Snell/Fresnel/TIR, planar exit intersections, absorption and spectral index equations. Browser checks exercise real shaders and pixels rather than mocked GPU calls.
 
-Это проверка независимой web-реализации. Нативные Windows/Android хосты не компилировались из-за отсутствия SDK; работа на Android, 120 Hz, расход энергии и покадровое совпадение с iOS не подтверждены. Приватные видео и извлечённые кадры не входят в пакет.
+Browser coverage includes refraction, layered glass/local content, free contours and holes, shape interruption, touch/drag outside the original hit box, pointer-capture fallback, semantic keyboard controls, text recoloring, context loss/restoration, shader rollback, custom uniforms/scattering and reduced-motion policy. Regression scenes cover fine patterns, a thin line and background crop/resize. Effect container tests cover stable identities, interruption and namespace isolation.
+
+Documentation checks verify page availability, navigation, generated reference tables and narrow-screen layout. The built package is loaded and rendered separately with `tools/check-package.mjs`. `tools/type-consumer.ts` compiles declarations in NodeNext mode independently of Vite.
+
+## Hardware coverage
+
+The local hardware path is Windows, Edge / ANGLE D3D11 on Intel UHD Graphics (0x9B41). Set `CHROMIUM_PATH` to an installed Chromium-family browser and `LIQUID_GLASS_GPU=1` for hardware tests. CI repeats build and browser checks on Ubuntu/Chromium. The GitHub Actions result is authoritative for each commit.
+
+Windows WebView2 and Android WebView asset preparation are checked. Native SDK builds, Android GPU performance, HDR, energy use, long-duration thermal behavior and 120 Hz presentation are not validated by this suite. Numeric CPU/GPU agreement establishes consistency of the implemented equations, not identity with a proprietary renderer.
+
+## Resource-constrained development
+
+Tests run with one worker. `NODE_OPTIONS=--max-old-space-size=192 --max-semi-space-size=2` limits Node heap use where necessary. Run builds, browser tests, benchmarking and recording sequentially. Production preview avoids file watching during recording. Generated documentation and artifact directories are excluded from development watchers.

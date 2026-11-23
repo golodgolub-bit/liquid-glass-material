@@ -1,5 +1,19 @@
 export type Vec3=readonly[number,number,number];
 export type Vec2=readonly[number,number];
+/** Fraunhofer C, d, F wavelengths in nanometers, used by the RGB Cauchy approximation. */
+export const spectralWavelengths=Object.freeze({red:656.2725,green:587.5618,blue:486.1327});
+/** Two-term Cauchy model from nd and Vd. This does not identify a proprietary UI material. */
+export function refractiveIndexAtWavelength(ior:number,abbeNumber:number,wavelengthNm:number):number{
+  if(!Number.isFinite(ior)||ior<1||!Number.isFinite(abbeNumber)||abbeNumber<5||!Number.isFinite(wavelengthNm)||wavelengthNm<380||wavelengthNm>780)throw new RangeError('Expected nd >= 1, Vd >= 5 and a visible wavelength (380-780 nm)');
+  const {red,green,blue}=spectralWavelengths,b=(ior-1)/abbeNumber/(1/blue**2-1/red**2);
+  return ior+b*(1/wavelengthNm**2-1/green**2);
+}
+export function spectralIndices(ior:number,abbeNumber:number):Vec3{return Object.values(spectralWavelengths).map(w=>refractiveIndexAtWavelength(ior,abbeNumber,w))as unknown as Vec3;}
+/** Per-channel extinction for a desired transmittance at a positive reference distance. */
+export function absorptionFromTransmittance(transmittance:Vec3,distance:number):Vec3{
+  if(!Number.isFinite(distance)||distance<=0||transmittance.length!==3||transmittance.some(t=>!Number.isFinite(t)||t<=0||t>1))throw new RangeError('Transmittance must be in (0,1], distance must be positive');
+  return transmittance.map(t=>-Math.log(t)/distance)as unknown as Vec3;
+}
 const dot=(a:Vec3,b:Vec3)=>a.reduce((s,n,i)=>s+n*b[i],0);
 function unit(v:Vec3):Vec3{if(v.length!==3||v.some(n=>!Number.isFinite(n))||Math.hypot(...v)<1e-9)throw new RangeError('A ray needs a finite nonzero vector');const n=Math.hypot(...v);return v.map(x=>x/n)as unknown as Vec3;}
 /** Normal points against the incident ray. null means total internal reflection. */
@@ -30,12 +44,12 @@ export function traceSlabRay(options:SlabRayOptions):SlabRay{
   const offset:Vec2|null=outgoing&&travel>=0?[0,1].map(j=>internal[j]*pathLength+outgoing[j]*travel-incident[j]*(options.thickness+gap)/-incident[2])as unknown as Vec2:null;
   return{internal,outgoing,offset,pathLength,entryReflectance,exitReflectance,transmittance:sigma.map(n=>(1-entryReflectance)*(1-exitReflectance)*Math.exp(-n*pathLength))as unknown as Vec3,totalInternalReflection:!outgoing};
 }
-export interface OpticalProbe {depth:number;width:number;thickness:number;refraction:number;ior:number;gradient:Vec2;presence?:number}
+export interface OpticalProbe {depth:number;width:number;thickness:number;refraction:number;ior:number;outsideIor?:number;gradient:Vec2;presence?:number}
 /** CPU reference of the default GPU screen-space kernel. Normal Y is up; gradient Y is down. */
 export function sampleGlassOptics(data:OpticalProbe):{normal:Vec3;displacement:Vec2}{
-  const presence=data.presence??1;if(Object.values(data).some(v=>typeof v==='number'&&!Number.isFinite(v))||!Number.isFinite(presence)||presence<0||presence>1||data.width<0||data.depth<0||data.thickness<0||data.refraction<0||data.ior<1||data.gradient.length!==2||data.gradient.some(n=>!Number.isFinite(n)))throw new RangeError('Invalid optical probe');
+  const presence=data.presence??1,outside=data.outsideIor??1;if(Object.values(data).some(v=>typeof v==='number'&&!Number.isFinite(v))||!Number.isFinite(presence)||presence<0||presence>1||data.width<0||data.depth<0||data.thickness<0||data.refraction<0||data.ior<1||outside<1||data.gradient.length!==2||data.gradient.some(n=>!Number.isFinite(n)))throw new RangeError('Invalid optical probe');
   const len=Math.hypot(...data.gradient),t=Math.max(0,Math.min(1,data.depth/Math.max(data.width,.001))),height=1-(1-t)**3,slope=2.4*(1-t)**2*Math.min(len,1)*(data.width>=.001?1:0);
-  const normal=unit([data.gradient[0]/Math.max(len,.0001)*slope,-data.gradient[1]/Math.max(len,.0001)*slope,1]),ray=refractRay([0,0,-1],normal,1/data.ior)!;
+  const normal=unit([data.gradient[0]/Math.max(len,.0001)*slope,-data.gradient[1]/Math.max(len,.0001)*slope,1]),ray=refractRay([0,0,-1],normal,outside/data.ior)??[0,0,0];
   const factor=data.refraction*height*1.6*Math.sqrt(data.thickness/18)*presence/Math.max(-ray[2],.15),d:Vec2=[ray[0]*factor,ray[1]*factor],scale=Math.min(1,Math.max(data.width,.001)*.7/Math.max(Math.hypot(...d),.0001));
   return{normal,displacement:[d[0]*scale,d[1]*scale]};
 }

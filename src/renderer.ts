@@ -65,7 +65,7 @@ interface Surface {
   layer:number;shape:GlassShape|null;shapeFrom:GlassShape|null;shapeMix:Spring;content:BackdropSource|null;contentTexture?:WebGLTexture;contentDirty:boolean;contentBytes:number;
   physics:Readonly<GlassPhysics>;deform:DeformationFunction|null;
 }
-const materialKeys = ['thickness','edgeWidth','bevel','edgeContrast','refraction','magnification','dispersion','ior','reflection','cornerPower','frost','tintOpacity','saturation','highlight','shadow','dimming'] as const;
+const materialKeys = ['thickness','edgeWidth','bevel','edgeContrast','refraction','magnification','dispersion','ior','outsideIor','abbeNumber','reflection','cornerPower','frost','tintOpacity','saturation','highlight','shadow','dimming'] as const;
 interface Program { handle: WebGLProgram; uniforms: Map<string, WebGLUniformLocation | null> }
 interface Target { texture: WebGLTexture; framebuffer: WebGLFramebuffer }
 interface TimerExtension { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }
@@ -203,6 +203,8 @@ export class GlassRenderer {
     this.assertAlive();if(options.color&&(options.color.length!==3||options.color.some(n=>!Number.isFinite(n)||n<0||n>1)))throw new RangeError('Invalid vibrancy color');
     this.vibrantSource=source;this.vibrantColor=options.color??null;this.vibrantDirty=true;this.invalidate();
   }
+  /** Mark modified foreground pixels without replacing the source or selected color. */
+  updateVibrancy():void{this.assertAlive();if(this.vibrantSource){this.vibrantDirty=true;this.invalidate();}}
   /** A separate equirectangular reflection environment. Null returns to reflected backdrop. */
   setReflectionSource(source:BackdropSource|null):void{this.assertAlive();this.reflectionSource=source;this.reflectionDirty=true;this.invalidate();}
   updateReflection():void{this.assertAlive();if(this.reflectionSource){this.reflectionDirty=true;this.invalidate();}}
@@ -248,8 +250,8 @@ export class GlassRenderer {
     const physics=createPhysics(options.physics,this.physicsDefaults),spring=(value:number,key:keyof Pick<GlassPhysics,'geometry'|'material'|'press'|'reveal'|'offset'|'impulse'|'tone'|'shape'>)=>new Spring(value,physics[key].frequency,physics[key].damping);
     const motion = Object.fromEntries(rectKeys.map(k => [k, spring(options.rect[k],'geometry')])) as Motion;
     const reveal = spring(options.hidden || options.materialize && !this.settings.reducedMotion ? 0 : 1,'reveal'); reveal.target = options.hidden?0:1;
-    const materialMotion = new Map<string,Spring>(materialKeys.map(k=>[k,spring(material[k],'material')]));
-    material.tint.forEach((n,i)=>materialMotion.set(`tint${i}`,spring(n,'material')));
+    const materialMotion = new Map<string,Spring>(materialKeys.map(k=>[k,spring(k==='abbeNumber'?(material[k]>0?1/material[k]:0):material[k],'material')]));
+    for(const key of ['tint','absorption']as const)material[key].forEach((n,i)=>materialMotion.set(`${key}${i}`,spring(n,'material')));
     const surface: Surface = { id: options.id, group, motion, press: spring(0,'press'), reveal, material, spacing, interactive: options.interactive ?? true, pointer: [options.rect.x + options.rect.width/2, options.rect.y + options.rect.height/2], tone: spring(0,'tone'), detail: 0,
       offsetX:spring(0,'offset'),offsetY:spring(0,'offset'),impulse:spring(0,'impulse'),impulseAge:0,pressed:false,elastic:options.elastic??true,
       materialMotion,variantMix:spring(material.variant==='clear'?1:0,'material'),waiters:new Set(),vibrancy,
@@ -273,9 +275,9 @@ export class GlassRenderer {
   private springs(s: Surface): Spring[] { return [...Object.values(s.motion),s.press,s.reveal,s.tone,s.offsetX,s.offsetY,s.impulse,s.variantMix,s.shapeMix,...s.materialMotion.values()]; }
   private cancelWaiters(s: Surface) { for(const resolve of s.waiters)resolve({finished:false});s.waiters.clear(); }
   private currentMaterial(s: Surface): Readonly<GlassMaterial> {
-    const numeric=Object.fromEntries(materialKeys.map(k=>[k,Math.max(materialRanges[k][0],Math.min(materialRanges[k][1],s.materialMotion.get(k)!.value))]));
-    const tint=s.material.tint.map((_,i)=>Math.max(0,Math.min(1,s.materialMotion.get(`tint${i}`)!.value)))as unknown as RGB;
-    return {...s.material,...numeric,tint};
+    const numeric=Object.fromEntries(materialKeys.map(k=>{let value=s.materialMotion.get(k)!.value;if(k==='abbeNumber')value=value<=.000001?0:Math.min(1e6,1/Math.min(.2,value));return[k,Math.max(materialRanges[k][0],Math.min(materialRanges[k][1],value))];}));
+    const vectors=Object.fromEntries((['tint','absorption']as const).map(key=>[key,s.material[key].map((_,i)=>Math.max(0,Math.min(1,s.materialMotion.get(`${key}${i}`)!.value)))]));
+    return {...s.material,...numeric,...vectors};
   }
   private pose(s:Surface){
     const rect=this.getRect(s.id),press=this.settings.reducedMotion?0:Math.max(0,Math.min(2,s.press.value));
@@ -331,12 +333,15 @@ export class GlassRenderer {
     const material = createMaterial({ ...base, ...options });
     for (const peer of this.surfaces.values()) if (peer.group === s.group) {
       this.cancelWaiters(peer);peer.material = material;peer.fixedTone = undefined;
-      for(const k of materialKeys)peer.materialMotion.get(k)!.target=material[k];
-      material.tint.forEach((n,i)=>peer.materialMotion.get(`tint${i}`)!.target=n);
+      for(const k of materialKeys)peer.materialMotion.get(k)!.target=k==='abbeNumber'?(material[k]>0?1/material[k]:0):material[k];
+      for(const key of ['tint','absorption']as const)material[key].forEach((n,i)=>peer.materialMotion.get(`${key}${i}`)!.target=n);
       peer.variantMix.target=material.variant==='clear'?1:0;this.adaptSurface(peer);
       if(!animate||this.settings.reducedMotion)for(const spring of [...peer.materialMotion.values(),peer.variantMix,peer.tone])spring.snap();
     }
     this.invalidate();
+  }
+  animateMaterial(id:string,options:Partial<GlassMaterial>,motion:MotionOptions={}):Promise<MotionResult>{
+    if(motion.spring)this.configurePhysics(id,{material:motion.spring});this.setMaterial(id,options,!motion.immediate);return this.whenSettled(id);
   }
   setInteraction(id: string, pressed: boolean, x?: number, y?: number): void {
     this.assertAlive(); const s = this.surface(id); if (!s.interactive) return;
@@ -589,7 +594,7 @@ export class GlassRenderer {
       gl.bindVertexArray(this.vao); this.upload();this.uploadVibrancy();this.uploadReflection();this.uploadShapes();this.uploadContents();this.blur();
       const groups = new Map<string,Surface[]>();
       for (const s of [...this.surfaces.values()].sort((a,b)=>a.layer-b.layer)) {
-        if (s.material.variant === 'identity' || s.reveal.value<=0.0001&&s.reveal.target===0) continue;
+        if (s.material.variant === 'identity'&&!s.contentTexture || s.reveal.value<=0.0001&&s.reveal.target===0) continue;
         const list = groups.get(s.group) ?? []; list.push(s); groups.set(s.group,list);
       }
       // Only overlapping optical bounds create a new backdrop dependency. Disjoint
@@ -626,10 +631,10 @@ export class GlassRenderer {
         // Scroll edges have already been composited into a rear-layer snapshot.
         if(depth)gl.uniform4f(this.uniform(p,'scrollEdges'),0,0,0,0);
         for(const entry of entries)if(entry.depth===depth){
-          gl.uniform1f(this.uniform(p,'contentOnly'),0);this.drawGroup(p,entry.list);
+          gl.uniform1f(this.uniform(p,'contentOnly'),0);if(entry.list[0].material.variant!=='identity')this.drawGroup(p,entry.list);
           for(const s of entry.list)if(s.contentTexture){this.bindTexture(s.contentTexture,5);gl.uniform1f(this.uniform(p,'contentOnly'),1);this.drawGroup(p,[s]);}gl.uniform1f(this.uniform(p,'contentOnly'),0);
           if(stacked&&this.options.drawBackdrop===false){
-            gl.bindFramebuffer(gl.FRAMEBUFFER,null);this.drawGroup(p,entry.list);for(const s of entry.list)if(s.contentTexture){this.bindTexture(s.contentTexture,5);gl.uniform1f(this.uniform(p,'contentOnly'),1);this.drawGroup(p,[s]);}gl.uniform1f(this.uniform(p,'contentOnly'),0);gl.bindFramebuffer(gl.FRAMEBUFFER,scene);
+            gl.bindFramebuffer(gl.FRAMEBUFFER,null);if(entry.list[0].material.variant!=='identity')this.drawGroup(p,entry.list);for(const s of entry.list)if(s.contentTexture){this.bindTexture(s.contentTexture,5);gl.uniform1f(this.uniform(p,'contentOnly'),1);this.drawGroup(p,[s]);}gl.uniform1f(this.uniform(p,'contentOnly'),0);gl.bindFramebuffer(gl.FRAMEBUFFER,scene);
           }
         }
       }
@@ -673,6 +678,8 @@ export class GlassRenderer {
     gl.uniform2f(this.uniform(p,'lensCenter'),(minX+maxX)/2,(minY+maxY)/2);gl.uniform1f(this.uniform(p,'magnification'),m.magnification);gl.uniform1f(this.uniform(p,'useVibrancy'),first.vibrancy&&this.vibrantSource?1:0);
     gl.uniform4f(this.uniform(p,'optics'),m.thickness,m.refraction,this.quality==='low'?0:m.dispersion,m.frost);
     gl.uniform3f(this.uniform(p,'physical'),m.ior,m.reflection,m.cornerPower);
+    gl.uniform2f(this.uniform(p,'medium'),m.outsideIor,this.quality==='low'?0:m.abbeNumber);
+    gl.uniform3fv(this.uniform(p,'absorption'),m.absorption);
     gl.uniform1f(this.uniform(p,'edgeWidth'),m.edgeWidth);gl.uniform1f(this.uniform(p,'bevelStrength'),m.bevel);gl.uniform1f(this.uniform(p,'edgeContrast'),m.edgeContrast);gl.uniform1f(this.uniform(p,'edgeLimit'),Math.min(...list.map(s=>Math.min(s.motion.width.value,s.motion.height.value)*.225)));
     gl.uniform4f(this.uniform(p,'finish'),m.saturation,m.highlight,m.shadow*(0.7+first.detail*0.6),m.dimming);
     gl.uniform4f(this.uniform(p,'tint'),...m.tint,m.tintOpacity);
@@ -709,6 +716,7 @@ export class SurfaceHandle {
   motion(options:SpringOptions):this{this.renderer.configureMotion(this.id,options);return this;}
   animateTo(rect: Partial<Rect>,options: MotionOptions = {}): Promise<MotionResult> {return this.renderer.animateSurface(this.id,rect,options);}
   material(options: Partial<GlassMaterial>,animate = true): this { this.renderer.setMaterial(this.id,options,animate); return this; }
+  animateMaterial(options:Partial<GlassMaterial>,motion?:MotionOptions):Promise<MotionResult>{return this.renderer.animateMaterial(this.id,options,motion);}
   shape(shape:GlassShape|null,options?:MotionOptions):Promise<MotionResult>{return this.renderer.setShape(this.id,shape,options);}
   content(source:BackdropSource|null):this{this.renderer.setContent(this.id,source);return this;}
   contains(x:number,y:number):boolean{return this.renderer.contains(this.id,x,y);}

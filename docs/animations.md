@@ -1,78 +1,46 @@
-# Программируемые анимации
+# Animation recipes
 
-Библиотека имеет два слоя управления: пружинные переходы к цели и программу, вычисляющую состояние каждый кадр. Они работают на одном scheduler renderer. Программа может быть постоянной; она не ограничена заранее подготовленными демонстрациями.
-
-## Мягкий переход к цели
+## Move and retarget
 
 ```ts
-import {motionPresets} from '@liquid-glass/material';
-await lens.animateTo({x: 260, width: 220}, {spring: motionPresets.fluid});
-lens.material({frost: .15, refraction: 20});
-await lens.settled();
+surface.move({ x: 180, y: 90 });
+// A later target preserves momentum.
+surface.move({ x: 120, width: 340, radius: 30 });
+await surface.settled();
 ```
 
-При смене цели геометрическая пружина сохраняет текущую скорость. Damping ближе к 1 уменьшает колебания; frequency ниже делает переход медленнее. Для прямого следования за пальцем bindDrag временно использует быстрое критическое слежение, затем возвращает мягкий preset. Нельзя делать жест медленным ради визуальной плавности: линза должна оставаться возле точки захвата.
+`animateTo()` and `animateMaterial()` return completion promises. `show()` and `hide()` animate material presence as well as optical geometry. `dismiss()` hides then removes a surface. `remove()` is immediate. Use `GlassEffectContainer` for declarative identity-based reconciliation, neighbor matching and interrupted entry/exit.
 
-## Постоянная программа
+## Animate indefinitely
 
 ```ts
-const motion = renderer.addAnimation(({time, delta, frame}) => {
-  // time и delta в секундах, не количество кадров.
-  lens.move({x: 180 + Math.sin(time * .7) * 80,
-             y: 120 + Math.cos(time * .9) * 24}, false);
-  lens.material({refraction: 15 + Math.sin(time * .5) * 3}, false);
-  renderer.setLight(-.65 + Math.sin(time * .4) * .2, -.76, false);
-  renderer.setReflectionRotation(time * .15);
+const program = renderer.addAnimation(({ time, delta, frame }) => {
+  surface.move({ x: 180 + Math.sin(time) * 60 });
+  renderer.setReflectionRotation(time * 0.2);
 });
-
-motion.pause();    // после оставшихся пружин renderer засыпает
-motion.resume();   // время продолжается без включения длительности паузы
-motion.cancel();   // окончательная отмена
+program.pause();
+program.resume();
+program.cancel();
 ```
 
-`animate=false` применяет вычисленную функцию прямо. Если оставить true, программа будет задавать меняющиеся цели пружинам, и результат получит дополнительное отставание. Это допустимо, если такой отклик нужен намеренно. Не вызывайте `animateTo` с ожиданием на каждом кадре: каждое новое назначение отменяет прошлое ожидание.
+Returning false ends a program. `elapsed` excludes paused time. Background tabs do not accumulate a large time jump on resume. Programs execute before spring integration and share the renderer's scheduler. Avoid a second requestAnimationFrame loop; a paused scene should not keep rendering at rest.
 
-## Конечная программа и повтор
+For a rigid prescribed path, use `move(rect,false)` within a program. For a softly followed path, keep the default spring update. After manually dragging a spring-driven object, resume by retargeting rather than snapping it to the old trajectory.
+
+## Animate reflection without uploads
+
+Set an environment canvas once with `setReflectionSource`, then animate `setReflectionRotation`. Only call `updateReflection` when the map's pixels change. Reflection motion does not require background capture or repeated texture uploads.
+
+## Morph a shape
 
 ```ts
-const duration = 2;
-renderer.addAnimation(({time}) => {
-  const p = Math.min(time / duration, 1);
-  const eased = p * p * (3 - 2 * p);
-  lens.move({x: 80 + 220 * eased}, false);
-  if (p === 1) return false;
-});
-
-// Бесконечный периодический цикл:
-const loop = renderer.addAnimation(({time}) => {
-  const phase = (time % 4) / 4;
-  lens.material({reflection: .3 + .2 * Math.cos(phase * Math.PI * 2)}, false);
-});
+const droplet = createGlassShape({ path: 'M50 3 C95 35 110 88 50 98 C-10 88 5 35 50 3Z' });
+await surface.shape(droplet);
+await surface.shape(null); // rounded rectangle again
 ```
 
-Для ping-pong используйте `0.5 - 0.5 * Math.cos(time * speed)` — скорость в разворотах будет нулевой. Для собственной физики интегрируйте по delta; при очень больших задержках применяйте substeps или ограничение шага в вашей модели. Время callback основано на timestamp requestAnimationFrame, поэтому скорость не зависит от 60/120 Hz.
+Morphing uses cached signed-distance fields. An interrupted morph retains its intermediate boundary. The shape atlas is 256×256; highly detailed contours can exceed its resolution. Even-odd holes and CPU hit tests are supported. Use a pure `deform` callback for velocity-dependent rectangular stretch.
 
-## Паузы, видимость и доступность
+## Clean up
 
-На старте и после возобновления delta равна 0. Скрытая вкладка и потерянный WebGL-контекст останавливают вызовы; длительность такого перерыва не прибавляется к time. Возобновление не перескакивает через секунды скрытого состояния. Явная pause сохраняет elapsed; cancel не возобновляется.
-
-По умолчанию программа приостанавливается при Reduced Motion. `running` при этом остаётся true как намерение выполнять программу после восстановления разрешённого режима. Если обновление необходимо для смысла интерфейса (например, важная визуализация текущих данных), приложение может явно передать `{essential:true}`. Декоративному движению такую опцию не задают. `setAccessibility({reducedMotion:undefined})` возвращает системную настройку.
-
-## Ручное прерывание
-
-```ts
-const drag = bindDrag(renderer, hitTarget, {
-  surface: lens,
-  onStart: () => loop.pause(),
-});
-```
-
-Если программу не остановить, и она, и drag будут назначать координаты одной поверхности. Последняя запись кадра победит. Приложение решает, возобновить ли орбиту после отпускания или оставить линзу в точке, выбранной человеком. UI должен показывать состояние программы.
-
-## Обработка ошибок и очистка
-
-Ошибка callback отменяет только этот controller и передаётся в renderer onError. Остальные поверхности продолжают рисоваться. Callback может отменить себя или вернуть false. Renderer dispose отменяет все controllers; самостоятельно созданные DOM/таймеры и медиаплееры освобождает приложение.
-
-Не создавайте второй requestAnimationFrame-цикл для самого WebGL draw. Для обновления видео используйте decoded-frame callbacks: загрузка одного кадра 24-fps видео на каждом 120-Hz display frame тратит ресурсы без новых пикселей. Постоянная программа, меняющая только геометрию/поворот карты, не вызывает повторный upload источников.
-
-Рабочий пример с переключением pause/resume и drag: [Программируемая линза](../examples/programmatic/).
+Cancel programs and dispose controls, containers and bindings before disposing the renderer. Capture helpers own event listeners and observers; their `dispose()` methods release them. Reduced Motion automatically suspends nonessential programs; use `{essential:true}` only when a callback is required for functional state rather than decorative motion.

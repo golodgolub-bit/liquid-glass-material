@@ -1,39 +1,31 @@
-# Движение и композиция v0.2
+# Motion and spring physics
 
-Основная демонстрация: `/#motion-studio`, кнопка **Watch all interactions**. Девять сцен используют публичные API библиотеки; программное воспроизведение навигационного примера управляет теми же поверхностями, которые используются при настоящем pointer drag. Есть отдельные тесты настоящего drag и клавиатуры.
+All finite transitions use analytic damped springs. Retargeting preserves current position and velocity; it does not restart a CSS keyframe. Spring integration is independent of the display refresh rate, although the compositor's frame delivery still determines perceived smoothness.
 
-## Как связаны оптика и движение
+```ts
+surface.motion({ frequency: 3.5, damping: 0.9 });
+await surface.animateTo({ x: 240, width: 320 }, { spring: { frequency: 4, damping: 0.9 } });
+await surface.animateMaterial({ frost: 0.2, tintOpacity: 0.1 });
+```
 
-Состояние поверхности содержит пружины геометрии, видимости, нажатия, смещения от пальца, затухающего импульса, варианта материала, тона и численных оптических свойств. Кадр обновляет их общей временной отметкой. Геометрия для SDF и `visualRect` DOM-привязки выводятся из одного состояния. Скорость даёт небольшое направленное растяжение; нажатие — подъём и подсветку, отпускание — затухающий возврат.
+Use the generated [API Reference](api.md) for exact signatures. `move(rect, false)` applies an immediate geometry update. `settled()` waits for all surface channels, not just position. Interruption or disposal resolves pending work with `{finished:false}`.
 
-`bindElement` не измеряет layout на каждом кадре анимации. Она хранит базовый rect и пишет только translate/scale/opacity. При resize/scroll геометрия измеряется заново. Если она не изменилась, повторный ResizeObserver не отменяет выполняющийся переход. Презентации также кешируют исходную и целевую геометрию.
+## Channels
 
-Параметры материала интерполируются отдельными критически затухающими пружинами; это исключает скачок blur/tint при переходе кнопки в большой контейнер. UV-смещение линзы зависит от текущей видимости, глубины края, взаимодействия и magnification. Видимость каждого участника SDF-группы передаётся отдельно — скрытие первого элемента не скрывает остальные.
+`geometry` controls x/y/width/height/radius. `material` controls numeric material fields and RGB vectors. `press`, `offset` and `impulse` provide touch response; `reveal` materializes a surface; `tone` adapts contrast; `shape` morphs contours. Profiles are available in `defaultPhysics`; `configurePhysics` changes only the supplied channels.
 
-Все ожидания имеют результат `{finished}`. Смена команды отменяет предыдущий незавершённый результат, сохраняя позицию и скорость. Поверхность удаляется `dismiss` только после успешного завершения hide. Dispose разрешает оставшиеся ожидания как прерванные. При Reduced Motion геометрические и материальные пружины устанавливаются в целевое состояние, а деформации отключаются.
+The default geometry profile is 3.5 Hz / 0.88 damping. Material and shape default to critical damping. Press is 4.7 Hz / 0.9; reveal is 4.2 Hz / 0.9. These are independent library presets, not recovered native animation constants. Frequency is cycles per second; damping is a ratio. A value of 1 is critical damping, less than 1 permits overshoot.
 
-## Линза навигации из третьего референса
+## Physical parameterization
 
-При реальном pointerdown `bindLiquidSelection` захватывает указатель и поднимает индикатор: он становится шире, выше и прозрачнее, усиливает преломление и увеличение. Pointermove задаёт положение центра по пальцу; положение допускает вынос за область прежнего индикатора. На pointerup выбирается ближайшая вкладка и возвращаются компактная геометрия и плотность. Pointercancel возвращает прежний выбор. Стрелки/Home/End управляют тем же состоянием без необходимости удержания мыши.
+```ts
+const spring = springFromPhysical({ mass: 1, stiffness: 480, damping: 39 });
+surface.configurePhysics({ geometry: spring });
+surface.kick({ x: 300 });
+```
 
-Текст, иконки и бейджи, нарисованные поверх canvas обычным DOM, не могут быть оптически искажены этим canvas. Поэтому в этом сценарии есть полноразмерные изображения нормального фона и активного RGBA foreground. Шейдер выбирает оба по одной преломлённой координате. Текст бейджа сохраняет цвет, активная иконка видна через линзу, а вне её остаётся обычная иконка. Для нативного DOM этот слой можно получать через HTML-in-Canvas.
+The physical `damping` above is viscous resistance, not the normalized ratio. `springToPhysical(profile, mass)` converts back. `kick` adds velocity in CSS pixels per second without resetting the target. Material values are projected into valid optical ranges before GPU submission, so underdamped animation cannot send a negative thickness or invalid index.
 
-## Девять воспроизводимых сценариев
+## Reduced Motion
 
-| Сцена | Что проверяется |
-|---|---|
-| Touch & light | подъём, притяжение, затухание, shimmer, смена tint/frost/refraction |
-| Button → menu | единый объект от кнопки до меню, обрезка содержимого, обратный ход, клавиатура |
-| Merge & split | общая граница, исчезновение внутренних швов, разделение |
-| Appear & dissolve | раздельное появление и скрытие членов одной группы |
-| Live controls | движущийся thumb switch/slider и оптический travelling selection |
-| Navigation lens | удержание, вынос за rail, foreground magnification, snap и badge distortion |
-| Scroll & adapt | движение контента, fade/blur края, смена тона и минимизация навигации |
-| Search morph | маленькая иконка → настоящий input → иконка |
-| Sheet transition | контрол → средний sheet → большой sheet → источник |
-
-Отдельно `examples/dom/` проверяет живое HTML-содержимое и настоящее взаимодействие с ним. Запись собственной демонстрации создаётся `node tools/record-motion.mjs`. Для устойчивой записи без HMR можно использовать production preview и передать `LIQUID_GLASS_URL`.
-
-## Границы
-
-Это реализации наблюдаемых сценариев, а не извлечённые из iOS алгоритмы. Они не заменяют платформенную клавиатуру, систему окон, native safe areas или всю библиотеку компонентов Apple. Покадровая идентичность функций, профилей и таймингов не доказана. Референсы пользователя сохраняются только локально и не попадают в публичный пакет.
+Reduced Motion snaps finite spring targets, bypasses velocity deformation and custom deformation, and suspends nonessential animation programs. Semantic selection and keyboard operation continue to work. Explicit `accessibility` overrides can be supplied by a native host. Test this policy live when settings change, rather than only during initialization.

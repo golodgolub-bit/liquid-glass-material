@@ -1,263 +1,1088 @@
-# Справочник API
+# API Reference
 
-Все импорты — из `@liquid-glass/material`; CSS подключается отдельно через `@liquid-glass/material/style.css`. Пространственные единицы — CSS px, время — секунды, углы — радианы, RGB — числа 0…1. Ошибки входных значений выбрасываются синхронно, ошибки отрисовки поступают в `onError`.
+Import runtime values and types from `@liquid-glass/material`; import `@liquid-glass/material/style.css` once. The signatures below are generated from the TypeScript source. Private implementation members are excluded.
 
-## GlassRenderer
+## Conventions
 
-```ts
-const renderer = new GlassRenderer(canvas: HTMLCanvasElement, options?: RendererOptions);
-```
-
-Нужен WebGL 2. Уже полученный у canvas контекст другого типа использовать нельзя. Constructor создаёт GPU-ресурсы; скрытую страницу renderer автоматически приостанавливает. На `webglcontextlost` сохраняет CPU-состояние, после restore заново загружает источники и поля форм.
-
-| RendererOptions | По умолчанию | Значение |
-|---|---|---|
-| `quality` | `'balanced'` | `'low' / 'balanced' / 'high'` |
-| `maxPixelRatio` | Предел профиля | Положительное число; учитывается вместе с DPR и лимитом GPU |
-| `drawBackdrop` | `true` | `false` оставляет внешний фон прозрачным, сохраняя композицию стеклянных слоёв |
-| `measureGpu` | `false` | Асинхронный GPU timer при наличии расширения |
-| `accessibility` | Системные media queries | Частичный `Accessibility` |
-| `onError` | `console.error` | `(error: Error) => void` |
-| `physics` | `defaultPhysics` | Частичные defaults физики для новых поверхностей |
-| `shader` | Стандартный | `GlassShader`, созданный createGlassShader |
-
-| Метод | Результат / действие |
+| Value | Convention |
 |---|---|
-| `resize(width, height)` | Положительные конечные размеры viewport; перевыделяет GPU targets |
-| `setQuality(quality)` | Меняет DPR/разрешение рассеивания и перевыделяет targets |
-| `setBackdrop(source)` | Сохраняет ссылку, загружает пиксели на следующем кадре |
-| `updateBackdrop()` | Отмечает изменённый исходник для повторной загрузки |
-| `bindVideo(video)` | Возвращает `stop()`; обновляет фон по `requestVideoFrameCallback` |
-| `setVibrancySource(sourceOrNull, {color?}?)` | Полноразмерный прозрачный слой символов либо маска с единым RGB-цветом |
-| `setReflectionSource(sourceOrNull)` | Отдельная equirectangular-карта окружения; null возвращает отражение фона |
-| `updateReflection()` | Перезагружает изменённый canvas/video окружения |
-| `setReflectionRotation(radians)` | Поворачивает карту по долготе без upload |
-| `setLight(x, y, animate = true)` | Ненулевое конечное направление в плоскости canvas; внутри нормализуется |
-| `configureLightMotion(springOptions)` | Пружина направления света |
-| `setShader(shaderOrNull)` | Транзакционная компиляция glass, blur и backdrop; null возвращает стандартные проходы |
-| `getShader()` | Immutable descriptor активной программы, defaults uniforms |
-| `setShaderUniform(name,value)` | Меняет общий float/vec2/vec3/vec4 без компиляции; custom blur инвалидирует его кэш |
-| `getShaderUniform(name)` | Последнее значение либо undefined |
-| `addSurface(options)` | Новый `SurfaceHandle`, id должен быть уникальным |
-| `addAnimation(callback, options?)` | Управляемая программа `GlassAnimation`, до интеграции пружин и draw |
-| `setAccessibility(partial)` | Переопределяет только переданные настройки; `undefined` возвращает системную настройку |
-| `setScrollEdges(partial)` | Задаёт области scroll-edge; остальные стороны сохраняются |
-| `subscribe(listener)` | Возвращает `unsubscribe()`; callback со snapshot stats после draw, не самостоятельный цикл анимации |
-| `invalidate()` | Запрашивает один кадр; повторные вызовы объединяются |
-| `releaseInteractions()` | Отпускает все удерживаемые поверхности |
-| `dispose()` | Идемпотентно останавливает программы и освобождает GPU/системные подписки |
+| Rectangles, depth, edge width, displacement | CSS pixels in renderer coordinates; origin at the upper left |
+| Color, tint, absorption | Three-component RGB tuples; color inputs are sRGB in [0,1] |
+| Refractive indices | Dimensionless; `ior` is the glass, `outsideIor` is the surrounding medium |
+| Absorption | Nonnegative extinction per CSS pixel; material components are limited to [0,1] |
+| Spring frequency / damping | Cycles per second / dimensionless damping ratio |
+| Physical spring | Mass, stiffness and viscous damping in a consistent application unit system |
+| Velocity / time | CSS pixels per second / seconds; angles are radians |
 
-Свойства `canvas`, `size: {width,height}`, `stats`, `accessibility`, `scrollEdges` доступны для чтения. Snapshot-объекты не изменяют внутреннее состояние при редактировании.
+`createMaterial()` returns an immutable validated material. `surface.material(partial)` merges fields and animates numeric values; changing the variant starts from that variant's preset. `identity` disables the optical effect and preserves local content. `materialRanges` exposes the validated numeric domain. A weakly damped spring may overshoot internally; values sent to the GPU are constrained to this domain.
 
-`BackdropSource = HTMLCanvasElement | OffscreenCanvas | HTMLImageElement | HTMLVideoElement`. Изображение должно быть загружено, видео — декодировать кадр; удалённому источнику нужен допустимый CORS. `ImageBitmap`, `ImageData`, `VideoFrame` предварительно рисуются в 2D canvas. Предельный размер проверяется по `MAX_TEXTURE_SIZE` GPU. Исходник не захватывает DOM или другие поверхности автоматически.
+Use one `GlassRenderer` per composited scene. Members of the same optical group must share material, spacing, layer and vibrancy. A group accepts up to 32 members. Higher layers refract the completed lower layers when they overlap. Disjoint groups reuse the same cached background scattering.
 
-## SurfaceOptions
+`surface.rect` is the spring geometry; `surface.state.visualRect` includes touch, reveal and custom deformation. DOM bindings and hit tests use the visual rectangle. Promises resolve with `{finished:false}` when interrupted or disposed. `dispose()` releases resources and event listeners; dispose bindings before their renderer.
 
-```ts
-type Rect = { x: number; y: number; width: number; height: number; radius: number };
-```
+The renderer owns a single demand-driven animation loop. `addAnimation()` participates in this scheduler; `pause()` stops decorative motion, `cancel()` unregisters it. Reduced Motion bypasses custom deformation and suspends nonessential programs. It does not remove semantic controls or keyboard interaction.
 
-Ширина/высота положительные, radius неотрицательный, все значения конечные. При draw radius ограничен половиной размеров.
+Custom GLSL uses WebGL 2 / GLSL ES 3.00. Managed uniforms are float, vec2, vec3 or vec4 with the `uGlass_` prefix. `setShader()` compiles all passes before swapping the pipeline; an error leaves the previous program running. Uniform changes reuse the program and invalidate custom scattering as needed.
 
-| Поле | По умолчанию | Смысл |
-|---|---|---|
-| `id` | Обязательно | Непустой уникальный идентификатор |
-| `rect` | Обязательно | Положение и размеры |
-| `material` | `materials.regular` | Частичные оптические параметры |
-| `group` | `id` | Совпадение объединяет SDF; максимум 32 поверхности на группу |
-| `spacing` | `0` или от группы | 0…100, ширина smooth union в CSS px |
-| `layer` | `0` или от группы | Конечное число, порядок от заднего к переднему |
-| `interactive` | `true` | Разрешает оптическую реакцию `interact` |
-| `elastic` | `true` | Растяжение от скорости движения; `false` для жёсткой панели |
-| `materialize` | `false` | Первое появление через оптическую видимость |
-| `hidden` | `false` | Начальная видимость 0 |
-| `vibrancy` | `false` или от группы | Включает чтение общей маски текста/символов |
-| `shape` | Округлённый rect | `GlassShape`, созданный `createGlassShape` |
-| `content` | Нет | Локальный RGBA-источник, который рисуется поверх материала и виден передним слоям |
-| `physics` | Defaults renderer | Частичный PhysicsOptions, все восемь каналов и деформация |
-| `deform` | Стандартная | Чистая DeformationFunction |
-
-Члены группы обязаны иметь одинаковые материал, spacing, layer и vibrancy. Изменение материала одного члена меняет всю группу. Разные группы не сливаются геометрически; передняя преломляет уже отрисованную заднюю. При равных layer сохраняется порядок добавления групп.
-
-## SurfaceHandle
-
-| Метод | Результат / действие |
-|---|---|
-| `move(partialRect, animate = true)` | `this`; задаёт цели геометрии; false синхронно устанавливает значения |
-| `motion(springOptions)` | `this`; меняет параметры геометрических пружин без смены цели |
-| `configurePhysics(partial)` | `this`; меняет каналы и параметры, сохраняя состояние |
-| `deform(functionOrNull)` | `this`; чистая функция возвращает визуальный Rect; null восстанавливает стандартную |
-| `kick(partialVelocity)` | `this`; добавляет скорость CSS px/s к геометрии, игнорируется при Reduced Motion |
-| `animateTo(partialRect, motionOptions?)` | `Promise<MotionResult>` |
-| `material(partialMaterial, animate = true)` | `this`; плавно меняет параметры всей группы |
-| `shape(shapeOrNull, motionOptions?)` | `Promise<MotionResult>`; null возвращает rounded rect |
-| `content(sourceOrNull)` | `this`; обновляет локальную текстуру; вызвать также после изменения её пикселей |
-| `contains(x,y)` | `boolean`; проверяет текущий визуальный контур, отверстия и смешанную форму |
-| `interact(pressed, x?, y?)` | `this`; включает/отпускает деформацию и подсветку касания |
-| `show(options?) / hide(options?)` | `Promise<MotionResult>`; видимость отдельного члена группы |
-| `settled()` | Ждёт покоя всех пружин данной поверхности |
-| `dismiss(options?)` | Скрывает и удаляет при успешном завершении |
-| `remove()` | Удаляет материал и локальную текстуру; привязки освобождаются отдельно |
-
-`rect` — текущее базовое положение, `foreground` — RGB-строка контрастного текста, `state` — snapshot:
-
-```ts
-interface SurfaceState {
-  rect: Rect; visualRect: Rect; velocity: Rect; visibility: number; pressed: number;
-  energy: number; moving: boolean; material: Readonly<GlassMaterial>;
-}
-```
-
-`visualRect` учитывает проявление, упругость и касание; hit targets должны следовать ему. `bindElement` делает это автоматически. Исходный `rect` не является конечной целью анимации. Методы удалённой поверхности выбрасывают ошибку. Прерывание move/material/shape/show/hide разрешает прежние ожидания с `{finished:false}`; это не исключение. `settled()` не ожидает окончания независимой бесконечной программы renderer.
-
-`physics` — immutable конфигурация поверхности. Полные типы и defaults: [Программирование](programmability.md). Там же описаны GlassShaderOptions, GLSL hooks, стандартный uniform ABI, полная замена fragment/blur/backdrop и восстановление программ. Параметры геометрии отображаются в velocity; остальные числовые каналы не являются полями Rect.
-
-## Открытые оптические и физические функции
-
-| Экспорт | Назначение |
-|---|---|
-| `createPhysics(options?,base?) / defaultPhysics` | Проверка, копирование и defaults восьми каналов |
-| `springFromPhysical({mass,stiffness,damping})` | Частота и damping ratio физической пружины |
-| `springToPhysical({frequency,damping},mass=1)` | Обратное преобразование |
-| `createGlassShader(options?) / shaderSources` | Сборка immutable shader descriptor и открытый GLSL исходник проходов |
-| `sampleGlassOptics(probe)` | CPU-reference стандартной экранной оптики |
-| `refractRay(incident,normal,eta)` | Нормализованный луч либо null при TIR |
-| `fresnelReflectance(cosIncident,n1,n2)` | Точный неполяризованный Fresnel на границе |
-| `traceSlabRay(options) / slabOpticsGLSL` | CPU/GPU путь через две границы; см. [расчёт лучей](ray-optics.md) |
-
-Типы: GlassPhysics, PhysicsOptions, PhysicsChannel, DeformationState, DeformationFunction, PhysicalSpring, GlassShader, GlassShaderOptions, ShaderUniform, ShaderValue, Vec2, Vec3, SlabRay, SlabRayOptions, OpticalProbe. Длины/координаты и границы применения приведены в отдельных руководствах; slab tracer не объявлен закрытой реализацией Apple.
+See [Programming](programmability.md), [Ray optics](ray-optics.md), [Effect containers](containers.md), [Text and icons](text-under-glass.md), [Integration](integration.md) and [Compatibility](apple-audit.md) for complete usage examples and platform boundaries.
 
 ## GlassMaterial
 
-Создаётся `createMaterial(partial?)`, возвращает новый immutable объект. Presets `materials.regular`, `materials.clear`, `materials.identity` также immutable. Частичное обновление `surface.material` сохраняет остальные настройки; смена `variant` сначала берёт preset нового варианта.
-
-| Параметр | Regular | Диапазон / смысл |
-|---|---|---|
-| `variant` | `'regular'` | `'regular' / 'clear' / 'identity'`; identity исключает поверхность из композиции |
-| `appearance` | `'auto'` | `'auto' / 'light' / 'dark'`; light — тёмный foreground, dark — светлый |
-| `thickness` | `18` | 0…100 px, оптическая глубина; не ширина выпуклости |
-| `edgeWidth` | `12` | 0…32 px, область оптического преломления; автоматически ограничена размером поверхности |
-| `bevel` | `0` | 0…1, декоративная выпуклая фаска; по умолчанию выключена, независимо от преломления |
-| `edgeContrast` | `.18` | 0…1, узкий затемнённый контур, независимый от фаски |
-| `refraction` | `13` | 0…100 px, сила краевого преломления |
-| `magnification` | `1` | 1…2, увеличение середины; 1 сохраняет масштаб |
-| `dispersion` | `.35` | 0…5, спектральное разделение; в low отключено |
-| `ior` | `1.48` | 1…2.5, показатель преломления и Fresnel |
-| `reflection` | `.38` | 0…1, сила отражения с учётом Fresnel |
-| `cornerPower` | `2.6` | 2…4, профиль continuous corners; круги/капсулы остаются круговыми |
-| `frost` | `.68` | 0…1, рассеивание между sharp и двумя уровнями blur |
-| `tint` | `[1,1,1]` | RGB, каждый компонент 0…1 |
-| `tintOpacity` | `0` | 0…1, цветовое поглощение |
-| `saturation` | `1.12` | 0…3 |
-| `highlight` | `.5` | 0…2, направленные краевые блики |
-| `shadow` | `.065` | 0…1, контактная тень |
-| `dimming` | `0` | 0…1, локальное затемнение |
-
-Clear отличается `variant:'clear', frost:.08, refraction:17, thickness:16, highlight:.6, appearance:'dark'`; остальное наследует Regular. Identity наследует Regular и выключает draw. Выпуклая рамка выключена через `bevel:0`, но оптическое преломление продолжает работать. `bevel:1` включает фаску для намеренного объёмного эффекта. `edgeWidth:0, magnification:1` отключает и краевое искажение, и увеличение середины. Чтобы выключить только искажение края, сохранив форму и настройки, используйте `refraction:0`.
-
-## Движение и программы
-
 ```ts
-interface SpringOptions { frequency?: number; damping?: number }
-interface MotionOptions { immediate?: boolean; spring?: SpringOptions }
-interface MotionResult { finished: boolean }
+export type RGB = readonly [
+    number,
+    number,
+    number
+];
+export type Quality = 'low' | 'balanced' | 'high';
+export type Appearance = 'auto' | 'light' | 'dark';
+/** Numeric bounds used for input validation and projecting oscillating springs onto valid optics. */
+export declare const materialRanges: Readonly<{
+    thickness: readonly [
+        number,
+        number
+    ];
+    edgeWidth: readonly [
+        number,
+        number
+    ];
+    bevel: readonly [
+        number,
+        number
+    ];
+    edgeContrast: readonly [
+        number,
+        number
+    ];
+    refraction: readonly [
+        number,
+        number
+    ];
+    magnification: readonly [
+        number,
+        number
+    ];
+    dispersion: readonly [
+        number,
+        number
+    ];
+    ior: readonly [
+        number,
+        number
+    ];
+    outsideIor: readonly [
+        number,
+        number
+    ];
+    abbeNumber: readonly [
+        number,
+        number
+    ];
+    reflection: readonly [
+        number,
+        number
+    ];
+    cornerPower: readonly [
+        number,
+        number
+    ];
+    frost: readonly [
+        number,
+        number
+    ];
+    tintOpacity: readonly [
+        number,
+        number
+    ];
+    saturation: readonly [
+        number,
+        number
+    ];
+    highlight: readonly [
+        number,
+        number
+    ];
+    shadow: readonly [
+        number,
+        number
+    ];
+    dimming: readonly [
+        number,
+        number
+    ];
+}>;
+/** All spatial parameters use CSS pixels; colors use sRGB in [0, 1]. */
+export interface GlassMaterial {
+    variant: 'regular' | 'clear' | 'identity';
+    appearance: Appearance;
+    /** Optical path depth in CSS pixels. Independent from the edge roll width. */
+    thickness: number;
+    /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
+    edgeWidth: number;
+    /** Optional raised edge shading, [0,1]. Disabled by default. */
+    bevel: number;
+    /** Narrow contrast contour, independent from decorative bevel. */
+    edgeContrast: number;
+    refraction: number;
+    /** Interior lens magnification, independent from the curved edge. */
+    magnification: number;
+    dispersion: number;
+    /** Refractive index and strength of environment reflection. */
+    ior: number;
+    /** Refractive index of the surrounding medium. Refraction uses outsideIor / ior. */
+    outsideIor: number;
+    /** Vd dispersion: 0 keeps artistic RGB separation; positive values enable Cauchy RGB indices. */
+    abbeNumber: number;
+    /** Beer-Lambert extinction coefficients per CSS pixel, RGB, [0,1]. */
+    absorption: RGB;
+    reflection: number;
+    /** Continuous corner profile; circles and full capsules stay circular. */
+    cornerPower: number;
+    /** Mix of shared blurred backdrop and sharp transmission, [0, 1]. */
+    frost: number;
+    tint: RGB;
+    tintOpacity: number;
+    saturation: number;
+    highlight: number;
+    shadow: number;
+    /** Localized darkening, particularly useful for Clear over bright media. */
+    dimming: number;
+}
+export declare const materials: Readonly<{
+    regular: Readonly<{
+        variant: "regular" | "clear" | "identity";
+        appearance: Appearance;
+        /** Optical path depth in CSS pixels. Independent from the edge roll width. */
+        thickness: number;
+        /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
+        edgeWidth: number;
+        /** Optional raised edge shading, [0,1]. Disabled by default. */
+        bevel: number;
+        /** Narrow contrast contour, independent from decorative bevel. */
+        edgeContrast: number;
+        refraction: number;
+        /** Interior lens magnification, independent from the curved edge. */
+        magnification: number;
+        dispersion: number;
+        /** Refractive index and strength of environment reflection. */
+        ior: number;
+        /** Refractive index of the surrounding medium. Refraction uses outsideIor / ior. */
+        outsideIor: number;
+        /** Vd dispersion: 0 keeps artistic RGB separation; positive values enable Cauchy RGB indices. */
+        abbeNumber: number;
+        /** Beer-Lambert extinction coefficients per CSS pixel, RGB, [0,1]. */
+        absorption: RGB;
+        reflection: number;
+        /** Continuous corner profile; circles and full capsules stay circular. */
+        cornerPower: number;
+        /** Mix of shared blurred backdrop and sharp transmission, [0, 1]. */
+        frost: number;
+        tint: RGB;
+        tintOpacity: number;
+        saturation: number;
+        highlight: number;
+        shadow: number;
+        /** Localized darkening, particularly useful for Clear over bright media. */
+        dimming: number;
+    }>;
+    clear: Readonly<{
+        variant: "clear";
+        frost: 0.08;
+        refraction: 17;
+        thickness: 16;
+        highlight: 0.6;
+        appearance: "dark";
+        /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
+        edgeWidth: number;
+        /** Optional raised edge shading, [0,1]. Disabled by default. */
+        bevel: number;
+        /** Narrow contrast contour, independent from decorative bevel. */
+        edgeContrast: number;
+        /** Interior lens magnification, independent from the curved edge. */
+        magnification: number;
+        dispersion: number;
+        /** Refractive index and strength of environment reflection. */
+        ior: number;
+        /** Refractive index of the surrounding medium. Refraction uses outsideIor / ior. */
+        outsideIor: number;
+        /** Vd dispersion: 0 keeps artistic RGB separation; positive values enable Cauchy RGB indices. */
+        abbeNumber: number;
+        /** Beer-Lambert extinction coefficients per CSS pixel, RGB, [0,1]. */
+        absorption: RGB;
+        reflection: number;
+        /** Continuous corner profile; circles and full capsules stay circular. */
+        cornerPower: number;
+        tint: RGB;
+        tintOpacity: number;
+        saturation: number;
+        shadow: number;
+        /** Localized darkening, particularly useful for Clear over bright media. */
+        dimming: number;
+    }>;
+    identity: Readonly<{
+        variant: "identity";
+        appearance: Appearance;
+        /** Optical path depth in CSS pixels. Independent from the edge roll width. */
+        thickness: number;
+        /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
+        edgeWidth: number;
+        /** Optional raised edge shading, [0,1]. Disabled by default. */
+        bevel: number;
+        /** Narrow contrast contour, independent from decorative bevel. */
+        edgeContrast: number;
+        refraction: number;
+        /** Interior lens magnification, independent from the curved edge. */
+        magnification: number;
+        dispersion: number;
+        /** Refractive index and strength of environment reflection. */
+        ior: number;
+        /** Refractive index of the surrounding medium. Refraction uses outsideIor / ior. */
+        outsideIor: number;
+        /** Vd dispersion: 0 keeps artistic RGB separation; positive values enable Cauchy RGB indices. */
+        abbeNumber: number;
+        /** Beer-Lambert extinction coefficients per CSS pixel, RGB, [0,1]. */
+        absorption: RGB;
+        reflection: number;
+        /** Continuous corner profile; circles and full capsules stay circular. */
+        cornerPower: number;
+        /** Mix of shared blurred backdrop and sharp transmission, [0, 1]. */
+        frost: number;
+        tint: RGB;
+        tintOpacity: number;
+        saturation: number;
+        highlight: number;
+        shadow: number;
+        /** Localized darkening, particularly useful for Clear over bright media. */
+        dimming: number;
+    }>;
+}>;
+export declare function createMaterial(options?: Partial<GlassMaterial>): Readonly<GlassMaterial>;
 ```
 
-Frequency положительная, damping неотрицательный. `motionPresets`: responsive `{3.8,.88}`, fluid `{3.1,.88}`, gentle `{2.5,.96}` — пары frequency/damping. Геометрические цели можно переназначать без сброса скорости. Морфинг произвольных полей при прерывании сохраняет границу с точностью поля, но не скорость каждой точки.
+## GlassRenderer and SurfaceHandle
 
 ```ts
-const animation = renderer.addAnimation(({time, delta, frame, renderer}) => {
-  surface.move({x: 100 + Math.sin(time) * 60}, false);
-}, {essential: false, paused: false});
+import { type GlassMaterial, type Quality, type RGB } from './material.js';
+import { type Rect } from './geometry.js';
+import { type GlassShader, type ShaderValue } from './shader-program.js';
+import { type GlassPhysics, type PhysicsOptions, type DeformationFunction } from './physics.js';
+import { type MotionOptions, type MotionResult, type SpringOptions } from './motion.js';
+import { type GlassShape } from './shape.js';
+import { GlassAnimation, type AnimationCallback, type AnimationOptions } from './animation.js';
+/** Canvas/image/video sources with consistent WebGL upload orientation. Draw ImageBitmap/ImageData/VideoFrame into a canvas first. */
+export type BackdropSource = HTMLCanvasElement | OffscreenCanvas | HTMLImageElement | HTMLVideoElement;
+export interface Accessibility {
+    reducedMotion: boolean;
+    reducedTransparency: boolean;
+    increasedContrast: boolean;
+}
+export interface ScrollEdges {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+    hard: boolean;
+    color: RGB | null;
+}
+export interface RendererOptions {
+    quality?: Quality;
+    maxPixelRatio?: number;
+    drawBackdrop?: boolean;
+    accessibility?: Partial<Accessibility>;
+    /** Optional asynchronous timer queries. CPU submission time is always available. */
+    measureGpu?: boolean;
+    onError?: (error: Error) => void;
+    physics?: PhysicsOptions;
+    shader?: GlassShader;
+}
+export interface SurfaceOptions {
+    id: string;
+    rect: Rect;
+    material?: Partial<GlassMaterial>;
+    /** Same group => shared material and SDF union. One material per group. */
+    group?: string;
+    spacing?: number;
+    interactive?: boolean;
+    materialize?: boolean;
+    hidden?: boolean;
+    /** Keep velocity-driven stretch for draggable objects; disable for a rigid panel. */
+    elastic?: boolean;
+    /** Composite the optional vibrant foreground through this surface's lens. */
+    vibrancy?: boolean;
+    /** Back-to-front order. Equal layers retain insertion order. A union shares one layer. */
+    layer?: number;
+    /** SVG contour in place of the rounded rectangle; fitted to rect. */
+    shape?: GlassShape;
+    /** Local transparent content, painted above this material and visible to higher glass layers. */
+    content?: BackdropSource;
+    physics?: PhysicsOptions;
+    deform?: DeformationFunction;
+}
+export interface SurfaceState {
+    rect: Rect;
+    visualRect: Rect;
+    velocity: Rect;
+    visibility: number;
+    pressed: number;
+    energy: number;
+    moving: boolean;
+    material: Readonly<GlassMaterial>;
+}
+export interface RenderStats {
+    frames: number;
+    cpuMs: number;
+    gpuMs: number | null;
+    drawCalls: number;
+    uploads: number;
+    blurPasses: number;
+    surfaces: number;
+    groups: number;
+    pixelRatio: number;
+    textureBytes: number;
+    foregroundUploads: number;
+    reflectionUploads: number;
+}
+/** A shared backdrop and GPU compositor. Owns no DOM content or application event loop. */
+export declare class GlassRenderer {
+    readonly canvas: HTMLCanvasElement;
+    constructor(canvas: HTMLCanvasElement, options?: RendererOptions);
+    get accessibility(): Readonly<Accessibility>;
+    get stats(): Readonly<RenderStats>;
+    get size(): Readonly<{
+        width: number;
+        height: number;
+    }>;
+    get scrollEdges(): Readonly<ScrollEdges>;
+    setScrollEdges(options: Partial<ScrollEdges>): void;
+    subscribe(listener: (stats: Readonly<RenderStats>) => void): () => void;
+    setAccessibility(settings: Partial<Accessibility>): void;
+    setQuality(quality: Quality): void;
+    setLight(x: number, y: number, animate?: boolean): void;
+    resize(width: number, height: number): void;
+    /** Source is stretched to the viewport; perform cover/contain cropping in your source canvas. */
+    setBackdrop(source: BackdropSource): void;
+    /** Full-viewport RGBA layer (e.g. blue active symbols) refracted only by vibrancy-enabled surfaces. */
+    setVibrancySource(source: BackdropSource | null, options?: {
+        color?: RGB;
+    }): void;
+    /** Mark modified foreground pixels without replacing the source or selected color. */
+    updateVibrancy(): void;
+    /** A separate equirectangular reflection environment. Null returns to reflected backdrop. */
+    setReflectionSource(source: BackdropSource | null): void;
+    updateReflection(): void;
+    setReflectionRotation(radians: number): void;
+    /** Run before spring integration and drawing, using the renderer's single scheduler. */
+    addAnimation(callback: AnimationCallback, options?: AnimationOptions): GlassAnimation;
+    /** Call after modifying a source canvas. Does not upload unchanged pixels on animation frames. */
+    updateBackdrop(): void;
+    /** Video uploads are scheduled by decoded frames rather than the display refresh rate. */
+    bindVideo(video: HTMLVideoElement): () => void;
+    addSurface(options: SurfaceOptions): SurfaceHandle;
+    getRect(id: string): Rect;
+    getForeground(id: string): string;
+    getState(id: string): SurfaceState;
+    getPhysics(id: string): Readonly<GlassPhysics>;
+    configurePhysics(id: string, options: PhysicsOptions): void;
+    setDeformation(id: string, fn: DeformationFunction | null): void;
+    kick(id: string, velocity: Partial<Rect>): void;
+    whenSettled(id: string): Promise<MotionResult>;
+    animateSurface(id: string, rect: Partial<Rect>, options?: MotionOptions): Promise<MotionResult>;
+    configureMotion(id: string, options: SpringOptions): void;
+    setVisibility(id: string, visible: boolean, options?: MotionOptions): Promise<MotionResult>;
+    updateSurface(id: string, rect: Partial<Rect>, animate?: boolean): void;
+    /** Updates every member of the group, keeping the optical union consistent. */
+    setMaterial(id: string, options: Partial<GlassMaterial>, animate?: boolean): void;
+    animateMaterial(id: string, options: Partial<GlassMaterial>, motion?: MotionOptions): Promise<MotionResult>;
+    setInteraction(id: string, pressed: boolean, x?: number, y?: number): void;
+    releaseInteractions(): void;
+    setShape(id: string, shape: GlassShape | null, options?: MotionOptions): Promise<MotionResult>;
+    setContent(id: string, source: BackdropSource | null): void;
+    contains(id: string, x: number, y: number): boolean;
+    removeSurface(id: string): void;
+    invalidate(): void;
+    /** Compile before replacing the live program. A failure leaves the previous shader intact. */
+    setShader(shader: GlassShader | null): void;
+    getShader(): GlassShader;
+    setShaderUniform(name: string, value: ShaderValue): void;
+    getShaderUniform(name: string): ShaderValue | undefined;
+    configureLightMotion(options: SpringOptions): void;
+    dispose(): void;
+}
+export declare class SurfaceHandle {
+    readonly id: string;
+    constructor(renderer: GlassRenderer, id: string);
+    get rect(): Rect;
+    get foreground(): string;
+    get state(): SurfaceState;
+    get physics(): Readonly<GlassPhysics>;
+    configurePhysics(options: PhysicsOptions): this;
+    deform(fn: DeformationFunction | null): this;
+    kick(velocity: Partial<Rect>): this;
+    move(rect: Partial<Rect>, animate?: boolean): this;
+    motion(options: SpringOptions): this;
+    animateTo(rect: Partial<Rect>, options?: MotionOptions): Promise<MotionResult>;
+    material(options: Partial<GlassMaterial>, animate?: boolean): this;
+    animateMaterial(options: Partial<GlassMaterial>, motion?: MotionOptions): Promise<MotionResult>;
+    shape(shape: GlassShape | null, options?: MotionOptions): Promise<MotionResult>;
+    content(source: BackdropSource | null): this;
+    contains(x: number, y: number): boolean;
+    show(options?: MotionOptions): Promise<MotionResult>;
+    hide(options?: MotionOptions): Promise<MotionResult>;
+    settled(): Promise<MotionResult>;
+    dismiss(options?: MotionOptions): Promise<MotionResult>;
+    interact(pressed: boolean, x?: number, y?: number): this;
+    remove(): void;
+}
 ```
 
-Callback вызывается до draw на едином scheduler. Возвращение `false` отменяет программу. `time` — активные секунды без пауз/скрытой вкладки/потерянного контекста; `delta` равен 0 на старте/возобновлении. `frame` начинается с 0. Callback может менять геометрию, материал, свет, отражение и источники. Для точной покадровой функции используйте `animate=false`, иначе создаются пружинные цели. Callback, выбросивший ошибку, отменяется и передаёт её в onError.
-
-`GlassAnimation`: `pause()`, `resume()`, `cancel()`, readonly `running`, `elapsed`. Cancel окончательный, resume после него ничего не делает. Running обозначает намерение выполнять программу: Reduced Motion может дополнительно приостановить её. `essential:true` следует задавать только для действительно необходимого обновления; ручной override Reduced Motion передаётся через renderer. Dispose отменяет все программы.
-
-`Spring(value, frequency=3.5, damping=.88)`: изменяемые value/target/velocity/frequency/damping, `step(seconds):boolean`, `snap(value?)`. Это низкоуровневая аналитическая пружина; renderer использует её автоматически. `roundedRectDistance(x,y,rect)` и `smoothUnion(a,b,k)` — вспомогательные функции геометрии.
-
-## Формы
+## effect-container
 
 ```ts
-const shape = createGlassShape({
-  path: 'M 50 5 L 95 95 L 5 95 Z',
-  viewBox: [100, 100], fillRule: 'nonzero',
-});
+import { GlassRenderer, type SurfaceHandle, type BackdropSource } from './renderer.js';
+import { type GlassMaterial } from './material.js';
+import { type Rect } from './geometry.js';
+import { type PhysicsOptions } from './physics.js';
+import type { GlassShape } from './shape.js';
+import type { MotionResult } from './motion.js';
+export type GlassEffectTransition = 'matchedGeometry' | 'materialize' | 'identity';
+export interface GlassEffectItem {
+    id: string;
+    rect: Rect;
+    union?: string;
+    shape?: GlassShape | null;
+    content?: BackdropSource | null;
+    interactive?: boolean;
+    transition?: GlassEffectTransition;
+}
+export interface GlassEffectContainerOptions {
+    namespace?: string;
+    spacing?: number;
+    layer?: number;
+    vibrancy?: boolean;
+    material?: Partial<GlassMaterial>;
+    physics?: PhysicsOptions;
+    transition?: GlassEffectTransition;
+}
+/** Reconciles stable effect identities without replacing their springs or GPU renderer. */
+export declare class GlassEffectContainer {
+    readonly namespace: string;
+    constructor(renderer: GlassRenderer, options?: GlassEffectContainerOptions);
+    get size(): number;
+    get(id: string): SurfaceHandle | undefined;
+    /** All rectangles and IDs are validated before reconciliation; call again to interrupt a transition. */
+    reconcile(items: readonly GlassEffectItem[], options?: {
+        animate?: boolean;
+    }): Promise<MotionResult[]>;
+    material(options: Partial<GlassMaterial>, animate?: boolean): this;
+    dispose(): void;
+}
 ```
 
-`path` — SVG path string, `viewBox` — положительные ширина/высота (по умолчанию 100×100), `fillRule` — nonzero/evenodd. Контур должен иметь видимую границу внутри viewBox. Поддерживаются Bézier-кривые и отверстия. Создание требует browser Canvas2D/Path2D, не выполняется в SSR. Дистанционное поле 256×256 строится один раз; масштабирование после создания не пересчитывает его. Большое увеличение выявляет разрешение поля. Для smooth union контуры задаются одному group.
-
-## Привязки DOM и жестов
-
-| Функция | Параметры / возвращаемое значение |
-|---|---|
-| `bindElement(renderer, element, options)` | options — SurfaceOptions без rect, плюс radius; обязательный id. Возвращает `{surface,refresh(animate=false),dispose}` |
-| `observeSize(renderer)` | Следит за размером canvas; возвращает функцию остановки |
-| `bindDrag(renderer, element, {surface,bounds?,onStart?,onEnd?,followSpring?,releaseSpring?})` | bounds — функция, возвращающая Rect; результат `{dragging,dispose}`. Проверяет реальный контур, поддерживает window routing при отказе pointer capture. Пружина отпускания по умолчанию восстанавливает настройку поверхности |
-| `bindLiquidSelection(renderer, rail, {id,items,initialIndex=0,vibrancy=true,material?,onSelect?})` | `{surface,selectedIndex,select(index,animate=true),refresh,dispose}`; горизонтальный lift/drag/snap, клавиши Left/Right/Home/End |
-| `bindLiquidHighlight(renderer, container, {id,items,layer=1,material?})` | `{surface,select(index),refresh,dispose}`; -1 скрывает; hover, focus, held drag для menu rows |
-
-`bindElement` владеет CSS translate/scale/opacity/visibility элемента, обновляет их из visualRect и восстанавливает при dispose. Используйте отдельную обёртку, если приложение само анимирует эти свойства. Canvas renderer не должен иметь CSS transform; координаты указателя масштабируются через его bounding rect. Саму DOM-кнопку bindElement не делает перетаскиваемой — для этого добавьте bindDrag.
-
-## Готовые контролы
-
-`ControlOptions = Omit<SurfaceOptions,'id'|'rect'> & {id?:string;radius?:number}`. Контролы создают семантический DOM и GPU-поверхность; результат содержит element, surface, refresh, dispose.
-
-| Функция | Дополнительные свойства результата |
-|---|---|
-| `glassButton(renderer,parent,label,options?)` | `element: HTMLButtonElement`; обычная кнопка, не свободный drag по умолчанию |
-| `glassToggle(renderer,parent,label,checked=false,options?)` | `checked`, `setChecked(boolean)`; role switch, change event |
-| `glassSlider(renderer,parent,label,value=50,options?)` | options min=0,max=100,step=1; `input`, `setValue(number)`; native range |
-| `glassTabs(renderer,parent,labels,options?)` | options label для aria; `selectedIndex`, `select(index)`; travelling surface |
-| `glassSearch(renderer,parent,options?)` | options placeholder='Search',width=340; `input`, `expanded`, `expand()/collapse():Promise<MotionResult>` |
-
-## Меню и панели
+## physics
 
 ```ts
-glassPopover(renderer, anchor, items, options?)
-glassSheet(renderer, anchor, contentElement, options?)
+import type { Rect } from './geometry.js';
+import type { SpringOptions } from './motion.js';
+export interface SpringProfile {
+    frequency: number;
+    damping: number;
+}
+export interface GlassPhysics {
+    geometry: SpringProfile;
+    material: SpringProfile;
+    press: SpringProfile;
+    reveal: SpringProfile;
+    offset: SpringProfile;
+    impulse: SpringProfile;
+    tone: SpringProfile;
+    shape: SpringProfile;
+    pressScale: readonly [
+        number,
+        number
+    ];
+    attraction: readonly [
+        number,
+        number
+    ];
+    velocityScale: number;
+    maxStretch: number;
+    crossCoupling: number;
+    revealScale: number;
+    impulseStrength: number;
+}
+export type PhysicsOptions = Partial<Omit<GlassPhysics, 'geometry' | 'material' | 'press' | 'reveal' | 'offset' | 'impulse' | 'tone' | 'shape'>> & Partial<Record<PhysicsChannel, SpringOptions>>;
+export type PhysicsChannel = 'geometry' | 'material' | 'press' | 'reveal' | 'offset' | 'impulse' | 'tone' | 'shape';
+export interface DeformationState {
+    rect: Readonly<Rect>;
+    visualRect: Readonly<Rect>;
+    velocity: Readonly<Rect>;
+    pressed: number;
+    visibility: number;
+    offset: readonly [
+        number,
+        number
+    ];
+}
+/** Pure function: used by rendering, DOM bindings and hit testing; no mutation or side effects. */
+export type DeformationFunction = (state: Readonly<DeformationState>) => Rect;
+export declare const physicsChannels: readonly PhysicsChannel[];
+export declare const defaultPhysics: Readonly<GlassPhysics>;
+export declare function createPhysics(options?: PhysicsOptions, base?: Readonly<GlassPhysics>): Readonly<GlassPhysics>;
 ```
 
-`MenuItem = {label,onSelect?,disabled?,separator?}`. Separator вставляется перед строкой. Панель имеет role menu/dialog и обновляет aria-haspopup/expanded/controls на anchor. Escape/outside dismiss; меню поддерживает клавиши перемещения, dialog — Tab trapping. Нажатие menuitem закрывает меню и вызывает onSelect.
+## motion
 
-`PanelOptions`: id, parent (по умолчанию canvas.parentElement), width (258), height, radius (28), material, destination:()=>Rect, liquidMorph (true у меню). Menu height по умолчанию `items.length*46+30`. Результат `PanelController`: element, surface, isOpen, `open/close/toggle():Promise<MotionResult>`, refresh, dispose. Sheet дополнительно `setDetent('medium'|'large')`; height medium ограничен 68% viewport. Геометрия и foreground следуют одной поверхности; графика перехода приблизительная, не приватная реализация UIKit.
+```ts
+import { Spring } from './spring.js';
+export interface SpringOptions {
+    frequency?: number;
+    damping?: number;
+}
+export interface MotionOptions {
+    immediate?: boolean;
+    spring?: SpringOptions;
+}
+export interface MotionResult {
+    finished: boolean;
+}
+export interface PhysicalSpring {
+    mass: number;
+    stiffness: number;
+    damping: number;
+}
+/** Physical damping coefficient c, not the damping ratio used by SpringOptions. */
+export declare function springFromPhysical({ mass, stiffness, damping }: PhysicalSpring): {
+    frequency: number;
+    damping: number;
+};
+export declare function springToPhysical(options: Required<SpringOptions>, mass?: number): PhysicalSpring;
+export declare const motionPresets: Readonly<{
+    responsive: Readonly<{
+        frequency: 3.8;
+        damping: 0.88;
+    }>;
+    fluid: Readonly<{
+        frequency: 3.1;
+        damping: 0.88;
+    }>;
+    gentle: Readonly<{
+        frequency: 2.5;
+        damping: 0.96;
+    }>;
+}>;
+export declare function configureSpring(spring: Spring, config?: SpringOptions): void;
+export declare function isResting(spring: Spring): boolean;
+```
 
-## Источники и окружение
+## animation
 
-`bindMediaBackdrop(renderer, imageOrVideo, {fit?:'cover'|'contain'|'fill', maxPixelRatio?:number, background?, onError?}?)` возвращает `{canvas,refresh,dispose}`. Fit по умолчанию cover, maxPixelRatio=1.5, background — CSS-цвет (по умолчанию чёрный). Размер renderer отслеживается, decoded video frames обновляют подложку. URL, play/pause и Object URL остаются у приложения.
+```ts
+import type { GlassRenderer } from './renderer.js';
+export interface AnimationFrame {
+    time: number; /** Seconds since this controller's previous active frame; zero on start/resume. */
+    delta: number;
+    frame: number;
+    renderer: GlassRenderer;
+}
+export type AnimationCallback = (frame: Readonly<AnimationFrame>) => void | boolean;
+export interface AnimationOptions {
+    essential?: boolean;
+    paused?: boolean;
+}
+/** Controlled by the renderer's single requestAnimationFrame scheduler. */
+export declare class GlassAnimation {
+    readonly essential: boolean;
+    constructor(callback: AnimationCallback, request: () => void, remove: () => void, essential?: boolean, paused?: boolean);
+    get running(): boolean;
+    get elapsed(): number;
+    pause(): void;
+    resume(): void;
+    cancel(): void;
+    /** @internal */ suspend(): void;
+    /** @internal */ tick(delta: number, renderer: GlassRenderer): void;
+}
+```
 
-`supportsDomBackdrop():boolean` проверяет фактический HTML-in-Canvas API. `bindDomBackdrop(renderer, sourceCanvas, contentElement, {maxPixelRatio=1.5,background?,foreground=false,onError?}?)` требует отдельный source canvas, содержащий content. Результат `{canvas,paints,refresh,dispose}`. Foreground отправляет RGBA в vibrancy source; явный цвет после каждого paint задаётся приложением либо самим foreground. Неподдерживаемый браузер выбрасывает ошибку — нужен явный источник или CSS fallback.
+## shader-program
 
-`bindEnvironmentLight(renderer, element, {strength=.8}?)` реагирует на pointer; strength 0…2. Возвращает `{requestDeviceOrientation():Promise<boolean>,dispose}`. Запрашивайте датчик только из явного действия пользователя. Сам binding не создаёт карту окружения; направление света и отражаемое изображение — разные входы.
+```ts
+export type ShaderValue = number | readonly [
+    number,
+    number
+] | readonly [
+    number,
+    number,
+    number
+] | readonly [
+    number,
+    number,
+    number,
+    number
+];
+export interface ShaderUniform {
+    type: 'float' | 'vec2' | 'vec3' | 'vec4';
+    value: ShaderValue;
+}
+export interface GlassShaderOptions {
+    /** Global GLSL declarations/helpers. Uniforms must use the uGlass_ prefix. */
+    declarations?: string;
+    /** Body of GlassOpticalSample glassOptics(GlassOpticalInput data). */
+    optics?: string;
+    /** Body of vec4 glassField(vec2 point). Use defaultGlassField(point). */
+    field?: string;
+    /** Body of vec3 glassShade(vec3 color,vec2 point,vec2 sampleUV,vec3 normal,float depth). */
+    shade?: string;
+    /** Full fragment replacement. Keep the standard uniform ABI to retain composition. */
+    fragment?: string;
+    /** Optional full scattering/backdrop passes; preserve their standard uniform ABI. */
+    blurFragment?: string;
+    backdropFragment?: string;
+    uniforms?: Readonly<Record<string, ShaderUniform>>;
+}
+export interface GlassShader {
+    readonly fragment: string;
+    readonly blurFragment: string;
+    readonly backdropFragment: string;
+    readonly uniforms: Readonly<Record<string, Readonly<ShaderUniform>>>;
+}
+export declare function validateShaderValue(type: ShaderUniform['type'], value: ShaderValue): void;
+export declare function createGlassShader(options?: GlassShaderOptions): GlassShader;
+export declare const shaderSources: Readonly<{
+    vertex: "#version 300 es\nprecision highp float;\nout vec2 uv;\nvoid main() {\n  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));\n  uv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n}";
+    glass: string;
+    copy: "#version 300 es\nprecision highp float;\nin vec2 uv; out vec4 color; uniform sampler2D source;uniform sampler2D blurred;\n\nuniform vec4 scrollEdges;uniform vec2 viewportSize;uniform vec4 edgeColor;uniform float edgeHard;\nvec3 applyScrollEdge(vec3 c,vec2 texcoord){\n  if(max(max(scrollEdges.x,scrollEdges.y),max(scrollEdges.z,scrollEdges.w))<0.001)return c;\n  vec2 p=vec2(texcoord.x,1.0-texcoord.y)*viewportSize;\n  vec4 distances=vec4(p.y,viewportSize.x-p.x,viewportSize.y-p.y,p.x);\n  vec4 f=1.0-smoothstep(vec4(0.0),max(scrollEdges,vec4(0.001)),distances);\n  f*=step(vec4(0.001),scrollEdges);\n  if(edgeHard>0.5)f=step(distances,scrollEdges)*step(vec4(0.001),scrollEdges);\n  float fade=max(max(f.x,f.y),max(f.z,f.w));\n  vec3 ambient=texture(blurred,texcoord).rgb;\n  float l=dot(ambient,vec3(.2126,.7152,.0722));\n  vec3 body=edgeColor.a>0.5?edgeColor.rgb:mix(vec3(.065,.08,.1),vec3(.96,.97,.985),smoothstep(.25,.55,l));\n  return mix(mix(c,ambient,fade*.75),body,fade*.72);\n}\nvoid main() { color = vec4(applyScrollEdge(texture(source, uv).rgb,uv), 1.0); }";
+    blur: "#version 300 es\nprecision highp float;\nin vec2 uv; out vec4 color; uniform sampler2D source; uniform vec2 direction;uniform float kernel[7];\nvoid main() {\n  // Dense Gaussian support: stretching a sparse five-tap kernel makes text\n  // split into repeated stripes. Every neighboring blur texel participates.\n  vec3 c=texture(source,uv).rgb*kernel[0];\n  for(int i=1;i<=6;i++){vec2 offset=direction*float(i);c+=(texture(source,uv+offset).rgb+texture(source,uv-offset).rgb)*kernel[i];}\n  color = vec4(c, 1.0);\n}";
+}>;
+```
 
-## Прокрутка и доступность
+## optics
 
-`bindScrollBehavior(renderer, scroller, {surface,expanded,collapsed,edge='bottom',edgeExtent=90,threshold=9,onScroll?})` возвращает `{refresh,dispose}`. Меняет размер/положение поверхности по направлению с hysteresis; приложение должно обновить изображение прокручиваемого контента в onScroll. При dispose восстанавливает прежние scroll edges.
+```ts
+export type Vec3 = readonly [
+    number,
+    number,
+    number
+];
+export type Vec2 = readonly [
+    number,
+    number
+];
+/** Fraunhofer C, d, F wavelengths in nanometers, used by the RGB Cauchy approximation. */
+export declare const spectralWavelengths: Readonly<{
+    red: 656.2725;
+    green: 587.5618;
+    blue: 486.1327;
+}>;
+/** Two-term Cauchy model from nd and Vd. This does not identify a proprietary UI material. */
+export declare function refractiveIndexAtWavelength(ior: number, abbeNumber: number, wavelengthNm: number): number;
+export declare function spectralIndices(ior: number, abbeNumber: number): Vec3;
+/** Per-channel extinction for a desired transmittance at a positive reference distance. */
+export declare function absorptionFromTransmittance(transmittance: Vec3, distance: number): Vec3;
+/** Normal points against the incident ray. null means total internal reflection. */
+export declare function refractRay(incident: Vec3, normal: Vec3, eta: number): Vec3 | null;
+/** Exact unpolarized interface reflectance, not the Schlick approximation. */
+export declare function fresnelReflectance(cosIncident: number, n1: number, n2: number): number;
+export interface SlabRayOptions {
+    incident?: Vec3;
+    entryNormal: Vec3;
+    exitNormal?: Vec3;
+    ior?: number;
+    outsideIor?: number;
+    thickness: number;
+    backdropDistance?: number;
+    absorption?: Vec3;
+}
+export interface SlabRay {
+    internal: Vec3 | null;
+    outgoing: Vec3 | null;
+    offset: Vec2 | null;
+    pathLength: number;
+    entryReflectance: number;
+    exitReflectance: number;
+    transmittance: Vec3;
+    totalInternalReflection: boolean;
+}
+/** Two planar interfaces, one transmitted path. No internal bounce tree or 3D scene. */
+export declare function traceSlabRay(options: SlabRayOptions): SlabRay;
+export interface OpticalProbe {
+    depth: number;
+    width: number;
+    thickness: number;
+    refraction: number;
+    ior: number;
+    outsideIor?: number;
+    gradient: Vec2;
+    presence?: number;
+}
+/** CPU reference of the default GPU screen-space kernel. Normal Y is up; gradient Y is down. */
+export declare function sampleGlassOptics(data: OpticalProbe): {
+    normal: Vec3;
+    displacement: Vec2;
+};
+/** Optional GPU slab path, used in an optics hook. Coordinates are the same as traceSlabRay. */
+export declare const slabOpticsGLSL = "\nstruct SlabRay {vec3 internalRay;vec3 outgoingRay;vec2 offset;float pathLength;float transmission;float tir;float valid;};\nfloat slabFresnel(float ci,float n1,float n2){if(n1==n2)return 0.0;float s2=pow(n1/n2,2.0)*(1.0-ci*ci);if(s2>=1.0)return 1.0;float ct=sqrt(1.0-s2);float rs=(n1*ci-n2*ct)/(n1*ci+n2*ct),rp=(n1*ct-n2*ci)/(n1*ct+n2*ci);return(rs*rs+rp*rp)*.5;}\nSlabRay traceSlab(vec3 incident,vec3 entryNormal,vec3 exitNormal,float ior,float outsideIor,float thickness,float gap){\n  vec3 i=normalize(incident),n=normalize(entryNormal),e=normalize(exitNormal),inside=refract(i,n,outsideIor/ior);\n  if(length(inside)<.000001)return SlabRay(inside,vec3(0),vec2(0),0.0,0.0,1.0,0.0);\n  float projection=dot(inside,e);if(projection>=-.000001)return SlabRay(inside,vec3(0),vec2(0),0.0,0.0,0.0,0.0);\n  float path=-thickness*e.z/projection;vec3 outRay=refract(inside,e,ior/outsideIor);\n  if(path<0.0)return SlabRay(inside,outRay,vec2(0),0.0,0.0,0.0,0.0);\n  if(length(outRay)<.000001)return SlabRay(inside,outRay,vec2(0),path,0.0,1.0,0.0);\n  float energy=(1.0-slabFresnel(clamp(-dot(i,n),0.0,1.0),outsideIor,ior))*(1.0-slabFresnel(clamp(-dot(inside,e),0.0,1.0),ior,outsideIor));\n  if(outRay.z>=-.000001)return SlabRay(inside,outRay,vec2(0),path,energy,0.0,0.0);\n  float travel=(-(thickness+gap)-inside.z*path)/outRay.z;if(travel<0.0)return SlabRay(inside,outRay,vec2(0),path,energy,0.0,0.0);\n  return SlabRay(inside,outRay,inside.xy*path+outRay.xy*travel-i.xy*(thickness+gap)/-i.z,path,energy,0.0,1.0);\n}";
+```
 
-`ScrollEdges = {top,right,bottom,left,hard,color}`: размеры неотрицательные, hard boolean, color RGB или null для адаптивного цвета. `Accessibility = {reducedMotion,reducedTransparency,increasedContrast}`. Системные media queries читаются в constructor и отслеживаются. Reduced Motion немедленно завершает пружины и приостанавливает неessential программы; Reduced Transparency усиливает непрозрачность; Increased Contrast меняет передачу цвета/границу.
+## shape
 
-## Метрики и ресурсы
+```ts
+/** A reusable SVG contour. Curves, concave outlines and even-odd holes are supported. */
+export interface GlassShape {
+    readonly path: string;
+    readonly viewBox: readonly [
+        number,
+        number
+    ];
+    readonly fillRule: CanvasFillRule;
+}
+export declare const shapeResolution = 256;
+/** Rasterized once, uploaded once. Moving/resizing a shape never runs a CPU distance transform. */
+export declare function createGlassShape(options: {
+    path: string;
+    viewBox?: readonly [
+        number,
+        number
+    ];
+    fillRule?: CanvasFillRule;
+}): GlassShape;
+export declare function shapePixels(shape: GlassShape): Uint8Array;
+export declare function blendShapes(a: GlassShape, b: GlassShape, progress: number): GlassShape;
+export declare function roundedShape(width: number, height: number, radius: number): GlassShape;
+export declare function shapeContains(shape: GlassShape, x: number, y: number): boolean;
+export declare function shapeDistance(shape: GlassShape, x: number, y: number, width: number, height: number): number;
+```
 
-`RenderStats`: frames, cpuMs, gpuMs (null без timer), drawCalls (drawArrays, не blit), uploads (фон), foregroundUploads, reflectionUploads, blurPasses (накопительные), surfaces, groups, pixelRatio, textureBytes (оценка, без скрытых копий драйвера). CPU submission не равно времени кадра. Постоянная программа намеренно поддерживает кадры; pause/cancel дают renderer уснуть после окончания оставшихся пружин.
+## dom
 
-## Низкоуровневые методы renderer по id
+```ts
+import { GlassRenderer, type SurfaceOptions, type SurfaceHandle } from './renderer.js';
+export interface ElementBinding {
+    surface: SurfaceHandle;
+    refresh: (animate?: boolean) => void;
+    dispose: () => void;
+}
+/** Bind semantic DOM content to a GPU surface. The root canvas must have no CSS transform. */
+export declare function bindElement(renderer: GlassRenderer, element: HTMLElement, options: Omit<SurfaceOptions, 'rect'> & {
+    radius?: number;
+}): ElementBinding;
+/** Measures only on resize; returns the teardown callback. */
+export declare function observeSize(renderer: GlassRenderer): () => void;
+```
 
-Обычно удобнее SurfaceHandle. Для интеграции с собственной моделью доступны эквивалентные методы renderer:
+## drag
 
-| Метод renderer | Эквивалент handle |
-|---|---|
-| `getRect(id) / getState(id) / getForeground(id)` | rect / state / foreground |
-| `updateSurface(id, partialRect, animate=true)` | move |
-| `configureMotion(id, springOptions)` | motion |
-| `animateSurface(id, partialRect, options?)` | animateTo |
-| `setMaterial(id, partialMaterial, animate=true)` | material |
-| `setInteraction(id, pressed, x?, y?)` | interact |
-| `setVisibility(id, visible, options?)` | show/hide |
-| `whenSettled(id)` | settled |
-| `setShape(id, shapeOrNull, options?)` | shape |
-| `setContent(id, sourceOrNull)` | content |
-| `contains(id, x, y)` | contains |
-| `removeSurface(id)` | remove |
+```ts
+import type { GlassRenderer, SurfaceHandle } from './renderer.js';
+import type { Rect } from './geometry.js';
+import type { SpringOptions } from './motion.js';
+export interface DragOptions {
+    surface: SurfaceHandle;
+    bounds?: () => Rect;
+    onStart?: () => void;
+    onEnd?: () => void;
+    followSpring?: SpringOptions;
+    releaseSpring?: SpringOptions;
+}
+/** Fast critically damped tracking during a grab; a softer spring releases the deformation. */
+export declare function bindDrag(renderer: GlassRenderer, element: HTMLElement, options: DragOptions): {
+    dispose: () => void;
+    readonly dragging: boolean;
+};
+```
 
-Не создавайте SurfaceHandle вручную: addSurface регистрирует всё необходимое состояние. Публичные TypeScript-типы экспортируются из корня: RendererOptions, SurfaceOptions, SurfaceState, ScrollEdges, Accessibility, RenderStats, BackdropSource, MotionOptions, MotionResult, SpringOptions, AnimationFrame, AnimationCallback, AnimationOptions, GlassMaterial, Quality, Appearance, RGB, Rect, GlassShape, ElementBinding, Control, ControlOptions, ToggleControl, SliderControl, TabsControl, PanelController, PanelOptions, SheetController, MenuItem, SearchControl, ScrollBehaviorOptions, DomBackdropBinding, LiquidSelection, LiquidSelectionOptions, LiquidHighlight, HighlightOptions, EnvironmentLight, DragOptions, MediaBackdropOptions, MediaBackdropBinding.
+## selection
+
+```ts
+import type { GlassRenderer, SurfaceHandle } from './renderer.js';
+import type { GlassMaterial } from './material.js';
+export interface LiquidSelectionOptions {
+    id: string;
+    items: readonly HTMLElement[];
+    initialIndex?: number;
+    vibrancy?: boolean;
+    material?: Partial<GlassMaterial>;
+    onSelect?: (index: number) => void;
+}
+export interface LiquidSelection {
+    surface: SurfaceHandle;
+    readonly selectedIndex: number;
+    select: (index: number, animate?: boolean) => void;
+    refresh: () => void;
+    dispose: () => void;
+}
+/** A touch-tracking lens lifts off a navigation rail, magnifies its foreground, then snaps back. */
+export declare function bindLiquidSelection(renderer: GlassRenderer, element: HTMLElement, options: LiquidSelectionOptions): LiquidSelection;
+```
+
+## highlight
+
+```ts
+import type { GlassRenderer, SurfaceHandle } from './renderer.js';
+import type { GlassMaterial } from './material.js';
+export interface HighlightOptions {
+    id: string;
+    items: readonly HTMLElement[];
+    layer?: number;
+    material?: Partial<GlassMaterial>;
+}
+export interface LiquidHighlight {
+    surface: SurfaceHandle;
+    select: (index: number) => void;
+    refresh: () => void;
+    dispose: () => void;
+}
+/** A single moving material boundary for menu rows, hover, keyboard focus and held selection. */
+export declare function bindLiquidHighlight(renderer: GlassRenderer, element: HTMLElement, options: HighlightOptions): LiquidHighlight;
+```
+
+## components
+
+```ts
+import { type ElementBinding } from './dom.js';
+import { GlassRenderer, type SurfaceOptions } from './renderer.js';
+export type ControlOptions = Omit<SurfaceOptions, 'id' | 'rect'> & {
+    id?: string;
+    radius?: number;
+};
+export interface Control<T extends HTMLElement> extends ElementBinding {
+    element: T;
+}
+export declare function glassButton(renderer: GlassRenderer, parent: HTMLElement, label: string, options?: ControlOptions): Control<HTMLButtonElement>;
+export interface ToggleControl extends Control<HTMLButtonElement> {
+    setChecked: (checked: boolean) => void;
+    readonly checked: boolean;
+}
+export declare function glassToggle(renderer: GlassRenderer, parent: HTMLElement, label: string, checked?: boolean, options?: ControlOptions): ToggleControl;
+export interface SliderControl extends Control<HTMLDivElement> {
+    input: HTMLInputElement;
+    setValue: (value: number) => void;
+}
+export declare function glassSlider(renderer: GlassRenderer, parent: HTMLElement, label: string, value?: number, options?: ControlOptions & {
+    min?: number;
+    max?: number;
+    step?: number;
+}): SliderControl;
+export interface TabsControl extends Control<HTMLDivElement> {
+    select: (index: number) => void;
+    readonly selectedIndex: number;
+}
+export declare function glassTabs(renderer: GlassRenderer, parent: HTMLElement, labels: readonly string[], options?: ControlOptions & {
+    label?: string;
+}): TabsControl;
+```
+
+## presentation
+
+```ts
+import { GlassRenderer, type SurfaceHandle } from './renderer.js';
+import type { GlassMaterial } from './material.js';
+import type { Rect } from './geometry.js';
+import type { MotionResult } from './motion.js';
+export interface PanelOptions {
+    id?: string;
+    parent?: HTMLElement;
+    width?: number;
+    height?: number;
+    radius?: number;
+    material?: Partial<GlassMaterial>;
+    destination?: () => Rect;
+    /** Rounded transient contour during menu expansion and retraction. */
+    liquidMorph?: boolean;
+}
+export interface PanelController {
+    element: HTMLDivElement;
+    surface: SurfaceHandle;
+    readonly isOpen: boolean;
+    open: () => Promise<MotionResult>;
+    close: () => Promise<MotionResult>;
+    toggle: () => Promise<MotionResult>;
+    refresh: () => void;
+    dispose: () => void;
+}
+export interface MenuItem {
+    label: string;
+    onSelect?: () => void;
+    disabled?: boolean;
+    separator?: boolean;
+}
+export declare function glassPopover(renderer: GlassRenderer, anchor: HTMLElement, items: readonly MenuItem[], options?: PanelOptions): PanelController;
+export interface SheetController extends PanelController {
+    setDetent: (detent: 'medium' | 'large') => Promise<MotionResult>;
+}
+export declare function glassSheet(renderer: GlassRenderer, anchor: HTMLElement, content: HTMLElement, options?: PanelOptions): SheetController;
+```
+
+## search
+
+```ts
+import type { GlassRenderer } from './renderer.js';
+import type { Control, ControlOptions } from './components.js';
+import type { MotionResult } from './motion.js';
+export interface SearchControl extends Control<HTMLDivElement> {
+    input: HTMLInputElement;
+    expand: () => Promise<MotionResult>;
+    collapse: () => Promise<MotionResult>;
+    readonly expanded: boolean;
+}
+export declare function glassSearch(renderer: GlassRenderer, parent: HTMLElement, options?: ControlOptions & {
+    placeholder?: string;
+    width?: number;
+}): SearchControl;
+```
+
+## scroll
+
+```ts
+import type { GlassRenderer, SurfaceHandle } from './renderer.js';
+import type { Rect } from './geometry.js';
+export interface ScrollBehaviorOptions {
+    surface: SurfaceHandle;
+    expanded: Rect;
+    collapsed: Rect;
+    edge?: 'top' | 'bottom';
+    edgeExtent?: number;
+    threshold?: number;
+    onScroll?: (offset: number) => void;
+}
+/** Direction-aware minimization with hysteresis. The application supplies its scrolling backdrop. */
+export declare function bindScrollBehavior(renderer: GlassRenderer, scroller: HTMLElement, options: ScrollBehaviorOptions): {
+    refresh: () => void;
+    dispose: () => void;
+};
+```
+
+## environment
+
+```ts
+import type { GlassRenderer } from './renderer.js';
+export interface EnvironmentLight {
+    requestDeviceOrientation: () => Promise<boolean>;
+    dispose: () => void;
+}
+/** Pointer-driven specular light; device orientation is enabled only by an explicit caller action. */
+export declare function bindEnvironmentLight(renderer: GlassRenderer, element: HTMLElement, options?: {
+    strength?: number;
+}): EnvironmentLight;
+```
+
+## media
+
+```ts
+import type { GlassRenderer } from './renderer.js';
+export interface MediaBackdropOptions {
+    fit?: 'cover' | 'contain' | 'fill';
+    maxPixelRatio?: number;
+    background?: string;
+    onError?: (error: Error) => void;
+}
+export interface MediaBackdropBinding {
+    canvas: HTMLCanvasElement;
+    refresh: () => void;
+    dispose: () => void;
+}
+/** Capture decoded media with the same crop as its viewport; no stretching unless explicitly requested. */
+export declare function bindMediaBackdrop(renderer: GlassRenderer, source: HTMLImageElement | HTMLVideoElement, options?: MediaBackdropOptions): MediaBackdropBinding;
+```
+
+## dom-backdrop
+
+```ts
+import type { GlassRenderer } from './renderer.js';
+export declare function supportsDomBackdrop(): boolean;
+export interface DomBackdropBinding {
+    canvas: HTMLCanvasElement;
+    refresh: () => void;
+    dispose: () => void;
+    readonly paints: number;
+}
+/** Live native DOM rasterization. The content must be inside this dedicated source canvas. */
+export declare function bindDomBackdrop(renderer: GlassRenderer, canvas: HTMLCanvasElement, content: HTMLElement, options?: {
+    maxPixelRatio?: number;
+    background?: string;
+    foreground?: boolean;
+    onError?: (error: Error) => void;
+}): DomBackdropBinding;
+```
+
+## spring
+
+```ts
+/** Closed-form damped spring: stable across refresh rates and long frame gaps. */
+export declare class Spring {
+    frequency: number;
+    damping: number;
+    value: number;
+    target: number;
+    velocity: number;
+    constructor(value: number, frequency?: number, damping?: number);
+    snap(value?: number): void;
+    step(seconds: number): boolean;
+}
+```
+
+## geometry
+
+```ts
+export interface Rect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    radius: number;
+}
+export declare function validateRect(rect: Rect): void;
+export declare function roundedRectDistance(x: number, y: number, rect: Rect): number;
+export declare function smoothUnion(a: number, b: number, spacing: number): number;
+```
+
+## index
+
+```ts
+export { GlassRenderer, SurfaceHandle } from './renderer.js';
+export type { RendererOptions, SurfaceOptions, SurfaceState, ScrollEdges, Accessibility, RenderStats, BackdropSource } from './renderer.js';
+export { motionPresets } from './motion.js';
+export { springFromPhysical, springToPhysical } from './motion.js';
+export type { PhysicalSpring } from './motion.js';
+export { createPhysics, defaultPhysics } from './physics.js';
+export type { GlassPhysics, PhysicsOptions, PhysicsChannel, DeformationState, DeformationFunction } from './physics.js';
+export { createGlassShader, shaderSources } from './shader-program.js';
+export type { GlassShader, GlassShaderOptions, ShaderUniform, ShaderValue } from './shader-program.js';
+export { refractRay, fresnelReflectance, traceSlabRay, sampleGlassOptics, slabOpticsGLSL } from './optics.js';
+export { spectralWavelengths, refractiveIndexAtWavelength, spectralIndices, absorptionFromTransmittance } from './optics.js';
+export type { Vec2, Vec3, SlabRay, SlabRayOptions, OpticalProbe } from './optics.js';
+export type { MotionOptions, MotionResult, SpringOptions } from './motion.js';
+export { GlassAnimation } from './animation.js';
+export type { AnimationFrame, AnimationCallback, AnimationOptions } from './animation.js';
+export { createMaterial, materials, materialRanges } from './material.js';
+export type { GlassMaterial, Quality, Appearance, RGB } from './material.js';
+export { Spring } from './spring.js';
+export { roundedRectDistance, smoothUnion } from './geometry.js';
+export type { Rect } from './geometry.js';
+export { GlassEffectContainer } from './effect-container.js';
+export type { GlassEffectItem, GlassEffectTransition, GlassEffectContainerOptions } from './effect-container.js';
+export { createGlassShape } from './shape.js';
+export type { GlassShape } from './shape.js';
+export { bindElement, observeSize } from './dom.js';
+export type { ElementBinding } from './dom.js';
+export { glassButton, glassToggle, glassSlider, glassTabs } from './components.js';
+export type { Control, ControlOptions, ToggleControl, SliderControl, TabsControl } from './components.js';
+export { glassPopover, glassSheet } from './presentation.js';
+export type { PanelController, PanelOptions, SheetController, MenuItem } from './presentation.js';
+export { glassSearch } from './search.js';
+export type { SearchControl } from './search.js';
+export { bindScrollBehavior } from './scroll.js';
+export type { ScrollBehaviorOptions } from './scroll.js';
+export { bindDomBackdrop, supportsDomBackdrop } from './dom-backdrop.js';
+export type { DomBackdropBinding } from './dom-backdrop.js';
+export { bindLiquidSelection } from './selection.js';
+export type { LiquidSelection, LiquidSelectionOptions } from './selection.js';
+export { bindLiquidHighlight } from './highlight.js';
+export type { LiquidHighlight, HighlightOptions } from './highlight.js';
+export { bindEnvironmentLight } from './environment.js';
+export type { EnvironmentLight } from './environment.js';
+import './style.css';
+export { bindDrag } from './drag.js';
+export type { DragOptions } from './drag.js';
+export { bindMediaBackdrop } from './media.js';
+export type { MediaBackdropOptions, MediaBackdropBinding } from './media.js';
+```

@@ -9,7 +9,7 @@
     {
       "surfaces": 1,
       "layout": "grid",
-      "viewport": "800Г—500 @ 1Г—",
+      "viewport": "800x500 @ 1x",
       "frames": 60,
       "frameMedianMs": 16.69999998807907,
       "frameP95Ms": 18,
@@ -35,7 +35,7 @@
     {
       "surfaces": 8,
       "layout": "grid",
-      "viewport": "800Г—500 @ 1Г—",
+      "viewport": "800x500 @ 1x",
       "frames": 60,
       "frameMedianMs": 16.600000023841858,
       "frameP95Ms": 18.899999976158142,
@@ -61,7 +61,7 @@
     {
       "surfaces": 24,
       "layout": "grid",
-      "viewport": "800Г—500 @ 1Г—",
+      "viewport": "800x500 @ 1x",
       "frames": 60,
       "frameMedianMs": 16.600000023841858,
       "frameP95Ms": 18.5,
@@ -87,7 +87,7 @@
     {
       "surfaces": 3,
       "layout": "stack",
-      "viewport": "800Г—500 @ 1Г—",
+      "viewport": "800x500 @ 1x",
       "frames": 60,
       "frameMedianMs": 16.69999998807907,
       "frameP95Ms": 18.400000035762787,
@@ -113,7 +113,7 @@
     {
       "surfaces": 8,
       "layout": "stack",
-      "viewport": "800Г—500 @ 1Г—",
+      "viewport": "800x500 @ 1x",
       "frames": 60,
       "frameMedianMs": 16.599999964237213,
       "frameP95Ms": 19.799999952316284,

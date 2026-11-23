@@ -1,56 +1,43 @@
-# Оптика и расчёт лучей
+# Ray optics and refractive indices
 
-## Какая трассировка есть
+The standard renderer uses screen-space lensing. An optional two-interface tracer offers a physically interpretable transmitted path through planar entry/exit interfaces. The two models are separate: neither is presented as Apple's unpublished shader.
 
-Стандартный материал — экранная модель: signed distance field → нормаль → Snell refraction → смещение UV → фильтрация изображения. Один исходный RGBA-слой не содержит геометрии и глубины полной сцены. Он не позволяет восстановить скрытые объекты, реальную толщину стекла или дерево многократных отражений.
-
-v0.6 дополнительно предоставляет аналитический **однопроходный путь через две плоские границы**. Это точный расчёт для описанной геометрии, но не общий path tracer и не подтверждённый код Apple.
-
-## CPU: Snell и Fresnel
+## Define the media
 
 ```ts
-import {refractRay, fresnelReflectance, traceSlabRay} from '@liquid-glass/material';
-const refracted = refractRay([.5,0,-Math.sqrt(.75)], [0,0,1], 1/1.48);
-// eta = n исходной среды / n следующей среды. При TIR: null.
-const reflected = fresnelReflectance(1, 1, 1.48);
-const path = traceSlabRay({
-  incident: [.5,0,-Math.sqrt(.75)],
-  entryNormal: [0,0,1], exitNormal: [0,0,1],
-  ior: 1.48, outsideIor: 1,
-  thickness: 10, backdropDistance: 4,
-  absorption: [.01,.02,0],
+surface.material({
+  ior: 1.52,
+  outsideIor: 1.0,
+  abbeNumber: 58,
+  absorption: absorptionFromTransmittance([0.94, 0.98, 0.99], 20)
 });
 ```
 
-Векторы нормализуются; нормаль каждой границы направлена **против падающего на неё луча**, как ожидает GLSL refract. Поэтому для параллельной пластины обе передаваемые нормали `[0,0,1]`, хотя внешние геометрические нормали её граней противоположны. Точка входа — начало координат. Выходная плоскость проходит через `(0,0,-thickness)` и ориентируется exitNormal; пересечение находится аналитически. Фон — горизонтальная плоскость `z=-(thickness+backdropDistance)`; incident.z должен быть отрицательным. Можно описать локальный клин с наклонённой выходной плоскостью, но не произвольный mesh.
+`ior` is the absolute glass index at the Fraunhofer d line (587.5618 nm). `outsideIor` is the surrounding medium. Refraction depends on their ratio; matched indices remove interface bending and Fresnel reflection. The default 1.48 is an independently chosen rendering parameter, not a measured Apple constant.
 
-Результат содержит internal, outgoing, offset, pathLength, entryReflectance, exitReflectance, transmittance и totalInternalReflection. Offset — разница между следом преломлённого и непреломлённого лучей на фоне, X вправо / Y вверх. Если фон недостижим или есть TIR, offset=null. Если выходной луч существует, но смотрит от фоновой плоскости, outgoing может быть ненулевым при offset=null; это не TIR.
+With `abbeNumber:0`, the artistic `dispersion` parameter offsets RGB samples. A positive Vd uses a two-term Cauchy approximation instead: red at 656.2725 nm, green at 587.5618 nm and blue at 486.1327 nm. `refractiveIndexAtWavelength(nd, Vd, wavelengthNm)` accepts visible wavelengths 380–780 nm; `spectralIndices(nd,Vd)` returns the three RGB indices. This is an RGB approximation, not a continuous spectral renderer. Abbe animation interpolates reciprocal Vd, so enabling dispersion grows smoothly from zero. Low quality disables chromatic sampling.
 
-Fresnel — среднее s/p-поляризаций. Поглощение — `(1-Fentry)*(1-Fexit)*exp(-absorption*pathLength)`. Внутренние повторные отражения и интерференция не суммируются. При TIR transmittance равен нулю. Коэффициент absorption имеет обратные единицы к thickness; все длины должны иметь согласованные единицы. Ior/outsideIor положительны, длины и absorption неотрицательны.
+`absorption` is an RGB extinction coefficient per CSS pixel. `absorptionFromTransmittance(rgb, distance)` converts a desired transmission at a reference distance into coefficients. The renderer attenuates the transmitted/scattered background according to the optical path; UI tint is a separate artistic operation.
 
-## GPU: тот же путь в материале
+## CPU ray helpers
 
 ```ts
-import {createGlassShader, slabOpticsGLSL} from '@liquid-glass/material';
-renderer.setShader(createGlassShader({
-  declarations: slabOpticsGLSL,
-  uniforms: {uGlass_gap: {type:'float', value:4}},
-  optics: `
-    GlassOpticalSample ray = defaultGlassOptics(data);
-    float t = clamp(data.depth / max(data.width,.001), 0.0, 1.0);
-    float h = 1.0 - pow(1.0-t, 3.0);
-    SlabRay path = traceSlab(vec3(0,0,-1), ray.normal, vec3(0,0,1),
-        data.ior, 1.0, data.thickness*h, uGlass_gap);
-    ray.displacement = path.offset * data.presence;
-    return ray;
-  `,
-}));
+import { traceSlabRay, refractRay, fresnelReflectance } from '@liquid-glass/material';
+const path = traceSlabRay({
+  incident: [0, 0, -1], entryNormal: [0.35, 0, 0.93675],
+  exitNormal: [0, 0, 1], ior: 1.52, outsideIor: 1,
+  thickness: 12, backdropDistance: 8, absorption: [0.002, 0.001, 0]
+});
 ```
 
-GLSL SlabRay возвращает internalRay, outgoingRay, offset, pathLength, transmission, tir и valid. Transmission скалярный, без absorption; цветное поглощение можно вычислить `exp(-sigma*pathLength)` в своём shade. tir=1 означает полное внутреннее отражение; valid=1 означает наличие прямого следа на фоне. При недостижимом фоне offset=0, valid=0; передача через границу может оставаться ненулевой, если луч ушёл в другую сторону. Нулевое displacement само по себе не превращает поверхность в физическое зеркало: для этого запрограммируйте shade и выборку карты окружения. Стенд демонстрирует геометрический путь, а не полную энергетическую модель.
+Vectors are normalized on input. Normals face against the incident ray; ray coordinates use Y up and negative Z into the scene. The entry point is the origin. The exit plane passes through `(0,0,-thickness)` and has `exitNormal` as its normal. The background plane is at `z=-(thickness+backdropDistance)`. The footprint offset is relative to the unrefracted incident ray at that plane. A tilted exit is intersected using its plane equation.
 
-## Проверка
+`refractRay(incident, normal, n1/n2)` implements Snell's law and returns null at total internal reflection. `fresnelReflectance(cosIncident,n1,n2)` computes the exact unpolarized interface reflectance. The slab result includes internal/outgoing directions, footprint offset, path length, entry/exit reflectance, RGB transmittance and a TIR flag. An outgoing ray that misses the background has no footprint.
 
-Численно проверяются закон Снеллиуса, критический угол, Fresnel при нормальном падении, сохранение направления после параллельной пластины, сдвиг следа и поглощение. Браузерный тест кодирует нормаль/смещение/передачу в пиксели и сравнивает с CPU с допуском один уровень RGBA8. В CPU расчёт выполняется в double, GLSL — highp float; это не обещание побитового равенства на всех GPU.
+Only the single transmitted path is returned. Energy lost to reflection is accounted for, but internal bounces, reflected images, arbitrary meshes, volumetric scattering and caustics are not traced.
 
-Определение GLSL refract доступно в [Khronos Reference](https://registry.khronos.org/OpenGL-Refpages/gl4/html/refract.xhtml). Выбор метода лучей не доказывает совпадение с [цифровым материалом Apple](https://developer.apple.com/videos/play/wwdc2025/219/). См. [аудит](apple-audit.md).
+## GPU helper
+
+Include `slabOpticsGLSL` in `createGlassShader({declarations})`, then call `traceSlab(incident, entryNormal, exitNormal, ior, outsideIor, thickness, gap)` from an optics hook. Its `SlabRay` contains `internalRay`, `outgoingRay`, `offset`, `pathLength`, scalar `transmission`, `tir` and `valid`. `valid=1` means the path reaches the background; `tir=1` specifically means total internal reflection. Add RGB absorption in your shade function if required.
+
+GPU and CPU results are tested against each other for normal, tilted, wedge and TIR cases. GPU invalid geometry returns `valid=0`; the CPU API throws for invalid inputs. The [live workbench](../examples/workbench/) demonstrates both models.

@@ -49,6 +49,8 @@ uniform vec4 optics; // thickness, refraction, dispersion, frost
 uniform vec4 finish; // saturation, highlight, shadow, dimming
 uniform vec4 tint;
 uniform vec3 physical; // ior, environment reflection, corner power
+uniform vec2 medium; // surrounding IOR, Vd (0 disables Cauchy dispersion)
+uniform vec3 absorption; // Beer-Lambert extinction per CSS pixel
 uniform float edgeWidth;uniform float edgeLimit;uniform float bevelStrength;uniform float edgeContrast;
 uniform sampler2D environmentMap;uniform float hasEnvironment;uniform float environmentRotation;
 uniform vec4 mode; // clear, appearance (-1 auto, 0 light, 1 dark), reduced transparency, contrast
@@ -117,6 +119,10 @@ GlassOpticalSample defaultGlassOptics(GlassOpticalInput data){
   return GlassOpticalSample(normal,displacement);
 }
 GlassOpticalSample glassOptics(GlassOpticalInput data){ /* GLASS_OPTICS */ }
+float spectralIndex(float wavelength){
+  float b=(physical.x-1.0)/max(medium.y,5.0)/(1.0/(486.1327*486.1327)-1.0/(656.2725*656.2725));
+  return physical.x+b*(1.0/(wavelength*wavelength)-1.0/(587.5618*587.5618));
+}
 vec3 glassShade(vec3 color,vec2 point,vec2 sampleUV,vec3 normal,float depth){ /* GLASS_SHADE */ }
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 void main() {
@@ -142,7 +148,8 @@ void main() {
   float t=clamp(depth/bevel,0.0,1.0);
   // Optical normals bend the transmitted ray. Shading normals are independent:
   // a lensing boundary must not automatically become a raised, embossed frame.
-  GlassOpticalSample optical=glassOptics(GlassOpticalInput(depth,min(edgeWidth,edgeLimit),optics.x,optics.y,physical.x,grad,presence));
+  GlassOpticalInput opticalInput=GlassOpticalInput(depth,min(edgeWidth,edgeLimit),optics.x,optics.y,physical.x/medium.x,grad,presence);
+  GlassOpticalSample optical=glassOptics(opticalInput);
   vec3 opticalNormal=normalize(optical.normal);
   vec3 normal=normalize(mix(vec3(0,0,1),opticalNormal,bevelStrength));
   vec3 incident=vec3(0.0,0.0,-1.0);
@@ -155,6 +162,12 @@ void main() {
   vec2 spectral=displacement*texel*optics.z*0.045;
   vec3 transmitted = texture(backdrop,refractUV).rgb;
   if (optics.z > 0.001) { transmitted.r = texture(backdrop,refractUV+spectral).r; transmitted.b = texture(backdrop,refractUV-spectral).b; }
+  if(medium.y>0.0){
+    opticalInput.ior=spectralIndex(656.2725)/medium.x;vec2 redRay=glassOptics(opticalInput).displacement;
+    opticalInput.ior=spectralIndex(486.1327)/medium.x;vec2 blueRay=glassOptics(opticalInput).displacement;
+    transmitted.r=texture(backdrop,centerUV+(uv-centerUV)/zoom+redRay*texel).r;
+    transmitted.b=texture(backdrop,centerUV+(uv-centerUV)/zoom+blueRay*texel).b;
+  }
   float frost = mix(optics.w, max(optics.w, 0.94), mode.z);
   vec3 nearScatter=texture(blurred,refractUV).rgb;
   vec3 wideScatter=texture(scatteredWide,refractUV).rgb;
@@ -163,6 +176,9 @@ void main() {
   float dark = mode.y < -0.5 ? 1.0 - smoothstep(0.25, 0.55, lum) : mode.y;
   // Roughness suppresses the sharp image instead of leaving a second sharp ghost.
   vec3 c = mix(transmitted, scattered, smoothstep(0.0,0.52,frost));
+  vec3 internalRay=refract(incident,opticalNormal,medium.x/physical.x);
+  float opticalPath=optics.x/max(abs(internalRay.z),.05);
+  c*=exp(-absorption*opticalPath*presence);
   c=applyScrollEdge(c,refractUV);
   c = mix(vec3(luma(c)), c, finish.x);
   float regular = 1.0 - mode.x;
@@ -172,8 +188,8 @@ void main() {
   c = mix(c, c * tint.rgb * 0.65 + tint.rgb * (0.17 + luma(c) * 0.27), tint.a);
   if(useVibrancy>0.5){vec4 foreground=texture(vibrantForeground,refractUV);c=mix(c,mix(foreground.rgb,vibrancyColor.rgb,vibrancyColor.a),foreground.a);}
   float facing=dot(n,normalize(light));
-  float f0=pow((physical.x-1.0)/(physical.x+1.0),2.0);
-  float fresnel=(f0+(1.0-f0)*pow(1.0-opticalNormal.z,5.0))*step(1.0001,physical.x);
+  float f0=pow((physical.x-medium.x)/(physical.x+medium.x),2.0);
+  float fresnel=(f0+(1.0-f0)*pow(1.0-opticalNormal.z,5.0))*step(.0001,abs(physical.x-medium.x));
   vec3 reflected=reflect(incident,opticalNormal);
   vec2 reflectedUV=clamp(uv+reflected.xy*bevel*3.0*texel,texel,1.0-texel);
   vec3 environment=texture(blurred,reflectedUV).rgb;

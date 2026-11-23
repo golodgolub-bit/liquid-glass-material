@@ -1,102 +1,59 @@
-# Интеграция в приложение
+# Installation and platform integration
 
-## Структура сцены
+## Install
 
-Один renderer на оптически общую область. Поместите WebGL canvas и семантические DOM hit targets в общий position-relative контейнер. Canvas занимает весь viewport; текстуры фона, foreground-маски и координаты поверхностей описывают эту же область. Не применяйте CSS transform к самому canvas renderer.
+Download the package from [GitHub Releases](https://github.com/golodgolub-bit/liquid-glass-material/releases) and install it locally:
 
-Renderer не обнаруживает фон страницы автоматически. Источником служит canvas, загруженное изображение/видео, поддерживаемый drawable DOM или bitmap, подготовленный нативным хостом. `content` отдельной поверхности задаётся в её локальных координатах; shader растягивает его на visualRect и отсекает контуром.
+```sh
+npm install ./liquid-glass-material-0.7.0.tgz
+```
 
-## Изображение и видео
+The package is an ESM distribution with TypeScript declarations and no runtime dependencies. It is not currently published to the npm registry.
 
 ```ts
-import {bindMediaBackdrop} from '@liquid-glass/material';
-const image = new Image();
-image.src = '/images/background.jpg';
-await image.decode();
-const media = bindMediaBackdrop(renderer, image, {fit: 'cover'});
-// resize renderer отслеживается binding автоматически
-media.dispose();
+import { GlassRenderer, bindElement, observeSize } from '@liquid-glass/material';
+import '@liquid-glass/material/style.css';
+const renderer = new GlassRenderer(canvas);
+const stopSize = observeSize(renderer);
+renderer.setBackdrop(backgroundCanvas);
+const binding = bindElement(renderer, button, {
+  id: 'action', radius: 24, material: { variant: 'regular' }
+});
+// On teardown:
+binding.dispose(); stopSize(); renderer.dispose();
 ```
 
-Для удалённого изображения задайте crossOrigin до src и разрешите CORS на сервере. Для локального файла используйте Object URL, затем обязательно revokeObjectURL при смене/закрытии. Видео запускает приложение из допустимого пользовательского действия; binding получает только декодированные кадры. Dispose binding не вызывает pause и не удаляет URL вашего плеера.
+Place the canvas behind semantic DOM controls in a positioned, isolated container. Give it CSS width/height; `observeSize` updates renderer dimensions. Keep the canvas untransformed. Use a real button for keyboard and assistive technology support. Do not put duplicate text in both a DOM foreground and a captured local foreground.
 
-Если crop уже выполнен в другом canvas, достаточно `setBackdrop(canvas)` и `updateBackdrop()` после изменения пикселей. SetBackdrop самостоятельно не делает cover — он растягивает вход на viewport.
+## Supply the background
 
-## React
+`setBackdrop` accepts HTMLCanvasElement, OffscreenCanvas, HTMLImageElement or HTMLVideoElement. The source is stretched to the viewport. Crop into a source canvas first, or use `bindMediaBackdrop(renderer,media,{fit:'cover'})` for coordinated cover/contain fitting. After changing a canvas, call `updateBackdrop()`; unchanged frames reuse the texture.
 
-React не является зависимостью библиотеки. Создавайте renderer и bindings в effect после появления DOM, освобождайте в cleanup. Не создавайте renderer при каждом render компонента.
+Decoded video frames use `requestVideoFrameCallback` through `bindVideo`; source painting should follow video decoding, not an unrelated permanent loop. Draw ImageBitmap/ImageData/VideoFrame into a canvas before supplying them. Remote images need compatible CORS headers.
 
-```tsx
-function GlassAction({source}: {source: HTMLCanvasElement}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  useLayoutEffect(() => {
-    const r = new GlassRenderer(canvasRef.current!);
-    const stop = observeSize(r);
-    r.setBackdrop(source);
-    const b = bindElement(r, buttonRef.current!, {id: 'save', radius: 26});
-    return () => { b.dispose(); stop(); r.dispose(); };
-  }, [source]);
-  return <div className="stage">
-    <canvas ref={canvasRef} aria-hidden="true" />
-    <button ref={buttonRef}>Сохранить</button>
-  </div>;
-}
-```
+`bindDomBackdrop` is an experimental progressive enhancement using HTML-in-Canvas when supported. Check `supportsDomBackdrop()` before enabling it. Arbitrary DOM capture is not a universally available browser feature. A CSS fallback preserves basic controls but does not reproduce the GPU optics.
 
-Здесь нужны обычные imports hooks из React и imports renderer/bindings из пакета; CSS stage соответствует быстрому старту. StrictMode может создать/освободить effect дважды, поэтому cleanup обязателен. При изменении содержимого того же source вызовите updateBackdrop через сохранённый ref renderer. При SSR выполняйте DOM-зависимый код только на клиенте. `supportsDomBackdrop` безопасен до появления document и вернёт false.
+## React and other frameworks
 
-## Живой HTML
-
-```html
-<canvas id="source" content="drawable">
-  <article drawable id="content">Ваш интерфейс</article>
-</canvas>
-<canvas id="glass"></canvas>
-```
-
-```ts
-if (supportsDomBackdrop()) {
-  const binding = bindDomBackdrop(renderer, sourceCanvas, content, {
-    background: '#eef3f9', maxPixelRatio: 1.5,
-  });
-  // binding.refresh() после внешнего изменения, если нужен новый paint
-}
-```
-
-Root content должен заполнять source canvas; source и WebGL canvas описывают один viewport. Drawable источник и WebGL-результат — разные canvas: читать и писать одну texture attachment нельзя. HTML-in-Canvas проверяется по фактическому API, а не по user-agent; на неподдерживаемом браузере предоставьте Canvas2D/bitmap-источник. Пример [живого DOM](../examples/dom/) показывает сохранение настоящей интерактивной кнопки.
-
-Слой `foreground:true` может быть отдельным drawable представлением активных символов, но не должен непрозрачно закрывать всё изображение. Для единого активного цвета маски проще использовать [Canvas2D-пример текста](text-under-glass.md).
+Create the renderer once in a mount effect, bind semantic elements after layout, refresh bindings after geometry changes, and dispose everything during teardown. Keep a single shared renderer for a scene. Framework state can drive `GlassEffectContainer.reconcile()` with stable IDs. Do not create a new renderer on every component render.
 
 ## Windows
 
-В `examples/windows` находится WPF-host с WebView2. `npm run build:hosts` подготавливает web-ресурсы. Для компиляции нужны соответствующий .NET SDK и WebView2 Runtime; конкретные команды и требования перечислены в README примера.
-
-Renderer выполняется внутри WebView, не подменяет WinUI/DWM. Чтобы преломлять содержимое своего нативного view, хост должен передавать согласованное изображение сцены; захват произвольного чужого окна библиотека не делает. Системные accessibility-параметры, которые WebView не отражает в media queries, передаются через setAccessibility.
+`examples/windows` hosts the built assets with WebView2. `npm run build:hosts` copies the ESM bundle and CSS into `WebAssets`. Build the C# project with the required .NET and WebView2 tooling. Native background pixels must be supplied by a host capture bridge; a web shader cannot sample unrelated native windows.
 
 ## Android
 
-В `examples/android` — Java/WebView-host с WebViewAssetLoader для локальных ресурсов. Подготовьте assets через build:hosts, затем собирайте Android-проект установленным SDK/Gradle. Нужны аппаратное ускорение и WebGL 2 в используемом WebView.
+`examples/android` loads the same renderer in a hardware-accelerated WebView. `npm run build:hosts` prepares its assets. Build with the Android SDK/Gradle toolchain and test on the actual target GPU. The library is a web/WebView engine, not a Jetpack Compose rendering backend. Android performance and energy consumption require device validation.
 
-Это интеграция через WebView, не native Compose/Skia-рендерер. Реальный Android GPU, FPS, нагрев и прокрутка требуют проверки на целевых устройствах. Low ограничивает DPR и отключает спектральные выборки; deep stack стекла всё равно дороже отдельных контролов.
+## Build from source
 
-## Desktop wrappers и мобильный web
-
-Electron и другие Chromium-хосты используют тот же ESM API. Не выключайте аппаратное ускорение; проверяйте наличие WebGL 2 и отдавайте CSS fallback при отказе constructor. Корректный touch-action задают bindings жестов; не отключайте прокрутку всего приложения ради одного drag.
-
-## Очистка ресурсов
-
-```ts
-animation.cancel();
-drag.dispose();
-menu.dispose();
-media.dispose();
-domBinding.dispose();
-elementBinding.dispose();
-stopResize();
-renderer.dispose();
-video.pause();
-URL.revokeObjectURL(localUrl);
+```sh
+npm ci
+npm run dev
+npm run check
+npm run build:demo
+npm run build:hosts
+npm pack
 ```
 
-Освобождайте только созданные вами объекты. Источники и DOM могут принадлежать другому компоненту; renderer их не удаляет. После renderer.dispose методы управления уже недействительны. При обычной смене материала dispose и повторное создание renderer не нужны.
+`dist` contains the package, `dist-demo` the static demo and documentation. Native host assets are prepared by the build; native SDK compilation is a separate step. See [Performance](performance.md) before selecting a viewport, DPR and layer budget.

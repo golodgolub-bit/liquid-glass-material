@@ -11,13 +11,13 @@ function paint(){
   renderer.resize(w,h);renderer.setBackdrop(background);renderer.setVibrancySource(mask,{color:[.03,.38,1]});lens.move({x:w*.45-100,y:h*.5-42},false);
 }
 const resize=new ResizeObserver(paint);resize.observe(stage);paint();
-renderer.subscribe(stats=>{const r=lens.state.visualRect;Object.assign(button.style,{left:`${r.x}px`,top:`${r.y}px`,width:`${r.width}px`,height:`${r.height}px`,borderRadius:`${r.radius}px`});document.querySelector('#stats')!.textContent=`${stats.cpuMs.toFixed(2)} ms CPU · ${stats.gpuMs?.toFixed(2)??'—'} ms GPU · отражение: ${stats.reflectionUploads} upload · ${renderer.accessibility.reducedMotion?'Reduced Motion':'анимация разрешена'}`;});
+renderer.subscribe(stats=>{const r=lens.state.visualRect;Object.assign(button.style,{left:`${r.x}px`,top:`${r.y}px`,width:`${r.width}px`,height:`${r.height}px`,borderRadius:`${r.radius}px`});document.querySelector('#stats')!.textContent=`${stats.cpuMs.toFixed(2)} ms CPU · ${stats.gpuMs?.toFixed(2)??'—'} ms GPU · reflection: ${stats.reflectionUploads} upload · ${renderer.accessibility.reducedMotion?'Reduced Motion':'motion enabled'}`;});
 const animation=renderer.addAnimation(({time})=>{const w=renderer.size.width,h=renderer.size.height;lens.move({x:(w-200)/2+Math.sin(time*.7)*Math.max(20,w*.2),y:h*.5-42+Math.sin(time*1.1)*32});renderer.setReflectionRotation(time*.35);renderer.setLight(-.65+Math.sin(time*.6)*.25,-.76,false);},{paused:true});
-function syncPlay(){play.setAttribute('aria-pressed',String(animation.running));play.textContent=animation.running?'Приостановить':'Запустить движение';}
+function syncPlay(){play.setAttribute('aria-pressed',String(animation.running));play.textContent=animation.running?'Pause motion':'Start motion';}
 play.addEventListener('click',()=>{animation.running?animation.pause():animation.resume();syncPlay();});
 const drag=bindDrag(renderer,button,{surface:lens,onStart:()=>{animation.pause();syncPlay();}});
 document.querySelector<HTMLInputElement>('#reflection')!.addEventListener('input',e=>lens.material({reflection:+(e.target as HTMLInputElement).value},false));
 document.querySelector<HTMLInputElement>('#edge')!.addEventListener('input',e=>lens.material({edgeWidth:+(e.target as HTMLInputElement).value},false));
 document.querySelector<HTMLInputElement>('#bevel')!.addEventListener('input',e=>lens.material({bevel:+(e.target as HTMLInputElement).value},false));
-let reflected=false;document.querySelector('#environment')!.addEventListener('click',e=>{reflected=!reflected;renderer.setReflectionSource(reflected?environment:null);const target=e.currentTarget as HTMLButtonElement;target.setAttribute('aria-pressed',String(reflected));target.textContent=`Карта окружения: ${reflected?'вкл':'выкл'}`;});
+let reflected=false;document.querySelector('#environment')!.addEventListener('click',e=>{reflected=!reflected;renderer.setReflectionSource(reflected?environment:null);const target=e.currentTarget as HTMLButtonElement;target.setAttribute('aria-pressed',String(reflected));target.textContent=`Environment: ${reflected?'on':'off'}`;});
 Object.assign(window,{programmaticGlass:{renderer,lens,animation,dispose:()=>{animation.cancel();drag.dispose();resize.disconnect();stopSize();renderer.dispose();}}});

@@ -1,53 +1,30 @@
-# Устройство материала
+# Architecture
 
-## Граница и плоская середина
+The renderer owns one WebGL 2 context, a full-viewport source and a set of optical groups. Background pixels are explicit application input; a shader cannot sample arbitrary content behind a canvas without that content being captured into a texture.
 
-Круги, капсулы и rounded rect используют аналитическое signed distance field. Отрицательное расстояние находится внутри, градиент задаёт направление края. Свободный SVG path переводится в дистанционное поле 256×256; градиент хранится вместе с расстоянием. Это позволяет использовать один оптический shader для всех форм и учитывать отверстия.
+## Rendering pipeline
 
-`edgeWidth` ограничивает область оптической нормали для Snell-преломления и Fresnel-отражения; за ней середина плоская. Нормаль декоративной фаски вычисляется отдельно: `bevel:0` выключает выпуклую рамку, сохраняя искажение фона и отражение окружения. На маленьких контролах оптическая область ограничена их размерами. `thickness` управляет оптическим путём отдельно от этой области. Смещение луча ограничено шириной оптической области, а не расстоянием конкретного пикселя до силуэта: иначе преломление схлопывается в узкую полоску. Это приближение цифрового материала, а не полная 3D-трассировка с многократными внутренними отражениями.
+1. Upload changed background, foreground mask, environment and local surface content.
+2. Produce two cached levels of dense Gaussian scattering.
+3. Sort groups by layer and identify overlapping optical bounds.
+4. Render shared SDF boundaries, refracted transmission, finish and local content.
+5. For an overlapping front layer, snapshot the completed rear layers and scatter that snapshot.
+6. Composite premultiplied coverage and local shadows; publish asynchronous timing information.
 
-## Пропускание, преломление и цвет
+A front layer never samples its own active framebuffer. Disjoint groups share the original cached scattering; intersecting layers add composition and scattering passes. Texture targets are allocated lazily and reused. Every frame updates uniforms instead of recompiling shaders.
 
-Snell refraction по нормали смещает координату выборки. Смещение непрерывно у силуэта и ограничено шириной оптической области. Magnification отдельно меняет масштаб внутреннего изображения. Небольшое спектральное смещение красного/синего каналов задаётся dispersion.
+## Geometry
 
-С v0.6 optical kernel, field и финальный shade заменяются через `createGlassShader`; полные glass/blur/backdrop-проходы также доступны. Стандартный shader извлечён в функции без изменения его основных численных коэффициентов. CPU-reference проверяется на GPU. Восемь каналов физики, импульс, деформация и свет открыты через [API программирования](programmability.md).
+Rounded rectangles use an analytic distance and gradient. Continuous corners use a configurable exponent; full capsules remain circular. Shared groups use a smooth union. SVG paths are converted once into a 256×256 distance/gradient atlas; movement uses the atlas without CPU recomputation. Even-odd holes remain optically empty and participate in hit testing.
 
-Frost смешивает sharp transmission и два уровня Gaussian scattering. Regular добавляет адаптивный тон, Clear сохраняет больше исходного изображения. Tint, saturation и dimming работают после выборки; vibrant mask затем возвращает читаемые активные символы через ту же координату. Карта отражения и направленный краевой свет дополняют передачу цвета.
+The material's optical normal bends rays independently from its shading normal. `bevel:0` prevents the refracting edge from automatically becoming a bright raised frame. `edgeContrast` provides a separate thin silhouette contour. Standard displacement is limited by edge width to avoid folds and unbounded sampling.
 
-Это приближённая экранная модель в RGBA8/sRGB. Она не моделирует полное физическое объёмное рассеивание, HDR и взаимодействие 3D-объектов. Численные настройки подобраны независимо от закрытого материала Apple.
+## Motion and adaptation
 
-## Слияние и порядок слоёв
+Analytic damped springs preserve velocity across retargeting. Geometry, reveal, material, touch, offset, impulse, tone and shape are separate channels. One scheduler runs continuous application programs, integrates springs and draws only while necessary. A small CPU background sample informs adaptive foreground tone when the background or surface position changes.
 
-Одинаковый group объединяет формы smooth union. Внутренние края исчезают, а преломление следует общей границе. До 32 членов группы имеют один материал, layer, spacing и vibrancy. Разные group остаются разными поверхностями.
+## Extension points
 
-```ts
-const a = renderer.addSurface({id:'a', group:'fluid', spacing:24,
-  rect:{x:60,y:100,width:80,height:80,radius:40}});
-const b = renderer.addSurface({id:'b', group:'fluid',
-  rect:{x:170,y:100,width:80,height:80,radius:40}});
-await b.animateTo({x:120});
-```
+Material numbers and RGB vectors are animatable. Physics profiles and deformation callbacks are public. GLSL hooks replace optics, distance fields and final shading; complete glass, blur and background fragments can also be replaced transactionally. Reflection source and rotation are independent of background uploads. See [Programming](programmability.md).
 
-Для настоящего стекла над стеклом создайте разные группы и задайте layer. Renderer определяет зависимости по пересекающимся оптическим bounds. Непересекающиеся группы делят исходный кэш; передняя пересекающаяся группа получает снимок уже законченных задних материалов и content. Нельзя читать texture, прикреплённую к текущему draw framebuffer: для этого есть отдельные snapshot targets.
-
-Локальный content движется с панелью. DOM-текст поверх WebGL не входит в снимок автоматически, поэтому для его преломления передним стеклом нужен content canvas или drawable DOM-композиция. Порядок при равном layer определяется добавлением групп, а не CSS z-index DOM.
-
-## Свободный контур и morph
-
-```ts
-const drop = createGlassShape({path:
-  'M 50 4 C 65 30 94 43 94 65 C 94 90 74 96 50 96 C 25 96 6 88 6 64 C 7 44 36 28 50 4 Z'});
-const lens = renderer.addSurface({id:'drop',shape:drop,
-  rect:{x:80,y:80,width:160,height:160,radius:40}});
-await lens.shape(null); // вернуть rounded rect
-```
-
-Морфинг смешивает дистанционные поля, а геометрия rect продолжает двигаться пружинами. При прерывании текущее поле приближённо запекается в исходное для следующего перехода. Сложные самопересечения и разные топологии могут давать схлопывающиеся участки; это не система соответствующих Bézier-контрольных точек. Для отверстий задаётся evenodd. `contains` проверяет текущую границу, поэтому отверстие не должно захватывать drag.
-
-## Кадры и ресурсы
-
-Renderer запрашивает кадр при изменении входов, движении пружин или наличии активной программы. Постоянная программа выполняется перед интеграцией и draw. После pause/cancel и успокоения пружин цикл прекращается. Скрытая вкладка останавливает render, context loss сохраняет CPU-состояние для восстановления.
-
-Фон имеет mip-предфильтрацию. Два blur-уровня требуют четырёх separable проходов на обновление исходного изображения. При перекрытии новые снимки задних слоёв требуют дополнительных проходов; стоимость растёт с глубиной композиции, а не только с количеством контролов. Формы и карты источников не пересчитываются от одного движения линзы. Собственную карту отражений можно вращать uniform без upload.
-
-Размеры/DPR/quality определяют GPU-память. Большие источники лучше предварительно уменьшать до нужного viewport. `dispose` освобождает GPU buffers/textures/programs и scheduler, но исходные объекты изображения принадлежат приложению.
+RGBA8/sRGB textures are used. There is no native system compositor, HDR/EDR path, arbitrary 3D reflection scene or automatic offscreen content recovery. These boundaries are explicit in [Compatibility](apple-audit.md).

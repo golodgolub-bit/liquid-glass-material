@@ -1,6 +1,6 @@
 {
   "name": "@liquid-glass/material",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Portable GPU glass material, spring motion and DOM bindings for WebGL 2 applications",
   "type": "module",
   "license": "MIT",
@@ -34,14 +34,15 @@
   "scripts": {
     "dev": "npm run build:docs && vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build && tsc -p tsconfig.lib.json",
-    "build:docs": "node tools/build-docs.mjs",
+    "build:docs": "node tools/build-api.mjs && node tools/build-docs.mjs",
     "build:demo": "npm run build:docs && vite build --mode demo",
     "build:hosts": "npm run build && node tools/build-hosts.mjs",
     "benchmark": "node tools/benchmark.mjs",
     "benchmark:hardware": "node tools/benchmark.mjs --d3d11",
     "test": "vitest run",
     "test:browser": "playwright test",
-    "check": "npm run build && npm test && npm run test:browser"
+    "check": "npm run build && npm test && npm run test:browser",
+    "capture:gallery": "node tools/capture-gallery.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",

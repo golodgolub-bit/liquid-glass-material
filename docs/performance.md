@@ -1,110 +1,50 @@
-# Производительность
+# Performance
 
-## Актуальный замер v0.6
+## v0.7: default and spectral optics
 
-23 ноября 2026 года, Intel UHD Graphics (0x9B41), Edge / ANGLE D3D11, 800×500 @ 1×. Пустой requestAnimationFrame: медиана 16.7 мс, p95 16.8 мс. По 60 кадров после прогрева; стандартная экранная модель, bevel=0. Пользовательский GLSL может менять стоимость рендера и здесь не измерен.
+23 November 2026, Windows / Edge / Intel UHD Graphics (0x9B41), ANGLE D3D11. Viewport 800x500 at DPR 1; 60 measured frames per scene. Empty rAF median: 16.7 ms in both runs. The spectral run enables Vd=58; both runs use the same background and moving geometry.
 
-| Сцена | GPU медиана | GPU p95 | Интервал медиана | Интервал p95 | CPU медиана |
+| Scene | Default GPU median | Spectral GPU median | Default frame p95 | Spectral frame p95 |
+|---|---:|---:|---:|---:|
+| One surface | 0.53 ms | 0.55 ms | 18.6 ms | 17.1 ms |
+| 8 disjoint | 1.03 ms | 1.08 ms | 19.0 ms | 17.3 ms |
+| 24 disjoint | 2.13 ms | 2.30 ms | 19.2 ms | 17.4 ms |
+| 3 stacked | 2.24 ms | 2.29 ms | 22.1 ms | 19.3 ms |
+| 8 stacked | 7.10 ms | 7.25 ms | 18.3 ms | 20.3 ms |
+
+Both runs recorded zero idle frames and one background upload. Raw reports: [default](benchmarks/v0.7-hardware.json), [spectral](benchmarks/v0.7-spectral-hardware.json). Separate short runs contain scheduling noise: a lower frame p95 must not be interpreted as a faster shader. Several p95 values exceed the 16.67 ms budget; mobile and 120 Hz performance remain unverified.
+
+## Measured hardware baseline
+
+Windows, Intel UHD Graphics (0x9B41), Edge / ANGLE D3D11; 800×500 CSS pixels at DPR 1. Each scene uses 60 measured frames after warmup. Baseline empty requestAnimationFrame: median 16.7 ms, p95 16.8 ms.
+
+| Scene | GPU median | GPU p95 | Frame median | Frame p95 | CPU median |
 |---|---:|---:|---:|---:|---:|
-| 1 поверхность | 0.54 мс | 0.56 мс | 16.70 мс | 18.00 мс | 0.90 мс |
-| 8 без пересечения | 1.01 мс | 1.02 мс | 16.60 мс | 18.90 мс | 3.10 мс |
-| 24 без пересечения | 2.06 мс | 2.09 мс | 16.60 мс | 18.50 мс | 3.10 мс |
-| 3 стекла друг над другом | 2.25 мс | 2.27 мс | 16.70 мс | 18.40 мс | 1.20 мс |
-| 8 стекла друг над другом | 7.11 мс | 7.83 мс | 16.60 мс | 19.80 мс | 0.90 мс |
+| One surface | 0.54 ms | 0.56 ms | 16.70 ms | 18.00 ms | 0.90 ms |
+| Eight disjoint | 1.01 ms | 1.02 ms | 16.60 ms | 18.90 ms | 3.10 ms |
+| Twenty-four disjoint | 2.06 ms | 2.09 ms | 16.60 ms | 18.50 ms | 3.10 ms |
+| Three stacked | 2.25 ms | 2.27 ms | 16.70 ms | 18.40 ms | 1.20 ms |
+| Eight stacked | 7.11 ms | 7.83 ms | 16.60 ms | 19.80 ms | 0.90 ms |
 
-В покое — 0 кадров; одна загрузка фона на серию. [Сырой отчёт v0.6](benchmarks/v0.6-hardware.json). Это короткий замер на одном ноутбуке; p95 выше бюджета 60 Hz. Паритет с iPad, работа на Android и 120 Hz не установлены.
+These are the [v0.6 raw measurements](benchmarks/v0.6-hardware.json), retained as a baseline rather than relabeled as newer-version results. Default screen-space optics were used; optional Cauchy dispersion and custom shaders were not measured in this series. Zero idle frames and one background upload were recorded. The interval p95 exceeds a 60 Hz frame budget; these results are not a guarantee of smooth presentation on every device.
 
-## Исторический замер v0.5.1
+## Architecture choices
 
-23 ноября 2026 года, Intel UHD Graphics (0x9B41), Edge / ANGLE D3D11, 800×500 @ 1×. Пустой requestAnimationFrame: медиана 16.7 мс, p95 16.8 мс. По 60 кадров после прогрева, `bevel:0`, `edgeWidth:12`.
+- One shared context and background, not a renderer per button.
+- Cached dense Gaussian scattering, recalculated when input changes.
+- Analytic distance gradients and a fast path for single surfaces.
+- Scissor bounds restrict glass rendering to affected regions.
+- Disjoint groups share cached textures; overlapping layers require additional snapshots and scattering.
+- Reflection rotation and uniform changes do not re-upload source images.
+- SVG fields are generated once and uploaded once per contour.
+- No readPixels/getError calls in the ordinary rendering path.
+- A demand-driven scheduler sleeps after springs and programs stop.
+- Low quality disables chromatic sampling and limits DPR.
 
-| Сцена | GPU медиана | GPU p95 | Интервал медиана | Интервал p95 | CPU медиана |
-|---|---:|---:|---:|---:|---:|
-| 1 поверхность | 0.54 мс | 0.57 мс | 16.7 мс | 18.5 мс | 0.8 мс |
-| 8 без пересечения | 1.01 мс | 1.02 мс | 16.6 мс | 19.0 мс | 1.8 мс |
-| 24 без пересечения | 2.06 мс | 2.10 мс | 16.7 мс | 18.2 мс | 1.0 мс |
-| 3 стекла друг над другом | 2.25 мс | 2.29 мс | 16.7 мс | 18.6 мс | 1.3 мс |
-| 8 стёкол друг над другом | 7.17 мс | 7.83 мс | 16.7 мс | 19.4 мс | 2.3 мс |
+## Measure your scene
 
-В покое — 0 кадров. [Сырой отчёт v0.5.1](benchmarks/v0.5.1-hardware.json). Это короткий замер; p95 интервала кадра превышает бюджет 60 Hz, паритет с iOS и работа на мобильном GPU не подтверждены.
+`npm run benchmark:hardware` selects Edge/D3D11 on Windows; `npm run benchmark` uses the available browser default. The report records the actual backend, GPU timers where supported, CPU submission time, frame intervals, texture estimates and idle frames. A software renderer must not be mistaken for hardware GPU performance.
 
-## Исторический замер v0.5
+GPU timings exclude parts of DOM layout and browser composition. Frame intervals include scheduling noise. Test p95/dropped frames, decoded video updates, scrolling and thermal behavior on the target device. At 60 Hz the interval budget is 16.67 ms; at 120 Hz it is 8.33 ms.
 
-23 ноября 2026 года, Intel UHD Graphics (0x9B41), Edge / ANGLE D3D11, 800×500 @ 1×. Пустой requestAnimationFrame: медиана 16.7 мс, p95 17.0 мс. По 60 кадров после прогрева; материал с новым узким краем, стандартное отражение фона.
-
-| Сцена | GPU медиана | GPU p95 | Интервал медиана | Интервал p95 | CPU медиана |
-|---|---:|---:|---:|---:|---:|
-| 1 поверхность | 0.54 мс | 0.56 мс | 16.7 мс | 17.9 мс | 0.5 мс |
-| 8 без пересечения | 1.00 мс | 1.02 мс | 16.7 мс | 18.2 мс | 1.6 мс |
-| 24 без пересечения | 2.06 мс | 2.08 мс | 16.7 мс | 18.7 мс | 3.2 мс |
-| 3 стекла друг над другом | 2.23 мс | 2.27 мс | 16.7 мс | 17.6 мс | 0.4 мс |
-| 8 стёкол друг над другом | 7.20 мс | 9.81 мс | 16.7 мс | 19.3 мс | 1.5 мс |
-
-В покое — ноль кадров. Исходный фон загружен один раз; независимая карта окружения в этой серии не задана. Сырой [отчёт v0.5](benchmarks/v0.5-hardware.json) содержит значения и backend. Это короткая проверка на одном ноутбуке; равенство производительности iOS, 120 Hz и отсутствие задержек на других устройствах не установлены. P95 превышает бюджет 60 Hz.
-
-## Исторический замер v0.4
-
-23 ноября 2026 года, Intel UHD Graphics (0x9B41), Edge / ANGLE D3D11, 800×500 @ 1×. Пустой requestAnimationFrame: медиана 16.7 мс, p95 16.9 мс. По 60 кадров после прогрева в каждой серии.
-
-| Сцена | GPU медиана | GPU p95 | Интервал медиана | Интервал p95 | CPU медиана |
-|---|---:|---:|---:|---:|---:|
-| 1 поверхность | 0.54 мс | 0.55 мс | 16.6 мс | 17.8 мс | 0.8 мс |
-| 8 без пересечения | 0.99 мс | 1.01 мс | 16.6 мс | 18.1 мс | 1.8 мс |
-| 24 без пересечения | 2.04 мс | 2.05 мс | 16.7 мс | 18.0 мс | 3.0 мс |
-| 3 стекла друг над другом | 2.25 мс | 2.26 мс | 16.8 мс | 18.6 мс | 1.3 мс |
-| 8 стёкол друг над другом | 7.16 мс | 7.74 мс | 16.7 мс | 18.9 мс | 2.2 мс |
-
-В покое — ноль кадров. Одна загрузка фона. Без перекрытия за всю серию четыре blur-прохода; при перекрытии — четыре дополнительных прохода на каждую новую глубину зависимости на каждом движущемся кадре. Текстуры около 4.8 MiB для обычной сцены и 8.8 MiB после выделения буферов композиции; содержимое поверхностей увеличивает расход отдельно. Буферы композиции выделяются по необходимости и переиспользуются, освобождаются при resize/dispose. Файл: `artifacts/benchmark-hardware.json`, предыдущий отчёт — `benchmark-hardware-v0.3.json`.
-
-Это короткий замер на этом ноутбуке, не гарантия 60/120 Hz на всех устройствах. Восемь наложенных стёкол существенно дороже восьми раздельных контролов. Полноэкранные blur-проходы при больших viewport/DPR требуют отдельного бюджета; мобильный GPU, длительное видео и нагрев здесь не проверены. P95 callback-интервалов выше 16.67 мс.
-
-## Исторический замер v0.3
-
-23 ноября 2026 года, Intel UHD Graphics (0x9B41), Edge / ANGLE D3D11, 800×500 @ 1×. Пустой requestAnimationFrame: медиана 16.6 мс, p95 17.2 мс.
-
-| Поверхности | GPU медиана | GPU p95 | Интервал медиана | Интервал p95 | CPU медиана |
-|---|---:|---:|---:|---:|---:|
-| 1 | 0.54 мс | 0.56 мс | 16.6 мс | 19.3 мс | 0.7 мс |
-| 8 | 1.00 мс | 1.01 мс | 16.7 мс | 18.6 мс | 2.5 мс |
-| 24 | 2.04 мс | 2.06 мс | 16.7 мс | 18.1 мс | 3.3 мс |
-
-На всю серию: одна загрузка фона, четыре прохода двух уровней Gaussian; в покое — ноль кадров. Память текстур около 4.5 MiB. Refraction, Fresnel, отражённый фон и непрерывные углы включены. Данные — `artifacts/benchmark-hardware.json`; предыдущий отчёт сохранён как `benchmark-hardware-v0.2.json`. Четыре blur-прохода выполняются только при обновлении фона. Источник использует mip-предфильтрацию, два уровня рассеивания — плотное ядро без пропуска соседних texel.
-
-Это короткая серия, близкая к 60 callback/с по медиане. P95 превышает 16.67 мс; безупречная плавность, 120 Hz, длительная прокрутка/видео, тепловой режим и Android не подтверждены. Различие с прежним замером 30 Hz нельзя приписывать ускорению библиотеки: контрольный пустой браузер тоже изменился.
-
-## Что оптимизировано
-
-- Один WebGL-контекст и общий фон на интерфейс.
-- Фон загружается через texSubImage2D при неизменном размере; texImage2D нужен при смене размера.
-- Четыре прохода исходного blur на изменение фона; движение непересекающихся поверхностей переиспользует текстуры. Наложение требует новых blur-снимков задних слоёв.
-- Один draw call на группу, обрезка области группы через scissor.
-- Аналитический градиент границы и объединения. Удалены повторные finite-difference вычисления SDF. Отдельный путь для одиночной формы.
-- Low отключает спектральные выборки и ограничивает DPR.
-- Нет readPixels и getError в обычном рендере. GPU timer queries опциональны и читаются после готовности. Небольшой getImageData применяется к 2D-источнику только при обновлении фона для адаптации, без чтения WebGL framebuffer.
-- Нет фонового requestAnimationFrame после остановки движения. Страница в background перестаёт рендериться.
-
-## Методика
-
-`tools/benchmark.mjs` открывает один Chromium, использует общий неподвижный canvas-фон 800×500 при DPR 1 и перемещает 1, 8, 24 отдельных поверхности 100×64. После прогрева сохраняет интервалы между показанными callback рендера, CPU submission и GPU timer при доступности. Каждая серия ограничена по числу кадров и 12 секундами, чтобы не зависать на программном GPU. Межкадровые интервалы включают планирование браузера и работу композитора; это не чистое время шейдера.
-
-По умолчанию установленный тестовый headless Chromium выбрал **SwiftShader**. Его результаты отражают программную растеризацию. После явного запуска Edge с ANGLE/D3D11 удалось измерить **Intel UHD Graphics (0x9B41)**. Название реального backend записано в каждом JSON. `benchmark-before-analytic-gradient.json` сохраняет программный замер до оптимизации; `benchmark-default.json` — после неё. Сопоставлять их надо с учётом шума среды.
-
-Аппаратный замер v0.2: `npm run benchmark:hardware` (Windows, установленный Edge; при необходимости задайте CHROMIUM_PATH). Результат — `artifacts/benchmark-hardware.json`. Короткая серия 23 ноября 2026 года по московскому времени, 800×500 @ 1×, отдельные движущиеся поверхности 100×64. Перед созданием renderer измеряется также пустой requestAnimationFrame:
-
-| Поверхности | GPU медиана | GPU p95 | Интервал кадра, медиана | Интервал p95 | CPU медиана |
-|---|---:|---:|---:|---:|---:|
-| 1 | 0.51 мс | 0.54 мс | 33.3 мс | 34.5 мс | 0.5 мс |
-| 8 | 0.78 мс | 0.81 мс | 33.3 мс | 34.9 мс | 1.2 мс |
-| 24 | 1.39 мс | 1.42 мс | 33.4 мс | 34.7 мс | 1.7 мс |
-
-В этой серии пустой requestAnimationFrame до создания renderer тоже имел медиану **33.3 мс**, p95 33.7 мс. Таким образом, браузер в текущем окружении выдавал около 30 callback/с уже без эффекта. Причина ограничения не установлена; маленькое GPU-время нельзя выдавать за доказательство 60/120 FPS. Более ранняя короткая серия v0.1 имела интервалы около 16.7 мс; сравнивать версии только по этим двум запускам некорректно.
-
-В покое — 0 кадров за измерительный интервал. На всю серию — 1 загрузка фона и 2 прохода blur. Значения CPU/GPU не включают все затраты приложения, DOM layout и обновление геометрии вызывающим кодом. Слияние 24 форм в одну группу, fullscreen-стекло, обновляемое видео, Android, энергоэффективность и продолжительный нагрев этим тестом не измерены. Отсутствие любых лагов и паритет с iOS не доказаны.
-
-## Проверять в продукте
-
-Запустите измерение в аппаратно ускоренном WebView на целевом устройстве. Смотрите p95 интервала кадра (для 60 Hz бюджет 16.67 мс, для 120 Hz — 8.33 мс), dropped frames и нагрев при продолжительном взаимодействии. Отдельно проверьте видео и прокрутку: они требуют обновления фона и blur.
-
-Сначала сокращайте площадь стекла, количество отдельных групп, DPR и разрешение исходника. Не создавайте отдельный renderer для каждой кнопки. Не стеклуйте весь контент и не вкладывайте материал в материал. CSS fallback полезен для произвольного DOM, но не заменяет оптический renderer.
-
-Локальные цифры и тесты не являются гарантией производительности другого устройства. API специально позволяет контролировать качество и получать измерения; автоматической подмены GPU-материала на другой эффект нет.
+Reduce affected area, DPR, source resolution, overlapping depth and independent containers first. Keep a single renderer per scene and update sources only when pixels change. Arbitrary custom GLSL can exceed the default performance budget. No equality of performance with native iOS/iPadOS is claimed.

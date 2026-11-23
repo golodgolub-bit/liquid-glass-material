@@ -5,13 +5,13 @@ import { join } from 'node:path';
 const cache=join(process.env.LOCALAPPDATA ?? '','ms-playwright');
 const installed=existsSync(cache)?readdirSync(cache).filter(n=>n.startsWith('chromium_headless_shell-')).sort().reverse().map(n=>join(cache,n,'chrome-headless-shell-win64','chrome-headless-shell.exe')).find(existsSync):undefined;
 const software=process.argv.includes('--software');
-const hardware=process.argv.includes('--d3d11');
+const hardware=process.argv.includes('--d3d11'),spectral=process.argv.includes('--spectral');
 const edge='C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH ?? (hardware && existsSync(edge)?edge:installed),headless:true,args:software?['--use-angle=swiftshader','--enable-unsafe-swiftshader']:hardware?['--use-angle=d3d11','--ignore-gpu-blocklist']:[]});
 try {
   const page=await browser.newPage({viewport:{width:960,height:640}});
   await page.goto('http://127.0.0.1:5173/tests/harness.html');
-  const result=await page.evaluate(async()=> {
+  const result=await page.evaluate(async(spectral)=> {
     const {GlassRenderer}=await import('/src/index.ts');
     window.testGlass.renderer.dispose();document.body.innerHTML='';
     const quantile=(values,p)=> {const a=[...values].sort((a,b)=>a-b);return a.length?a[Math.min(a.length-1,Math.floor(a.length*p))]:null;};
@@ -25,7 +25,7 @@ try {
     const results=[];
     for(const [count,layout] of [[1,'grid'],[8,'grid'],[24,'grid'],[3,'stack'],[8,'stack']]) {
       const surfaces=[];
-      for(let i=0;i<count;i++)surfaces.push(renderer.addSurface({id:`bench-${i}`,rect:{x:40+(layout==='stack'?i*18:(i%6)*120),y:50+(layout==='stack'?i*12:Math.floor(i/6)*100),width:100,height:64,radius:30}}));
+      for(let i=0;i<count;i++)surfaces.push(renderer.addSurface({id:`bench-${i}`,rect:{x:40+(layout==='stack'?i*18:(i%6)*120),y:50+(layout==='stack'?i*12:Math.floor(i/6)*100),width:100,height:64,radius:30},material:{abbeNumber:spectral?58:0}}));
       await new Promise(r=>setTimeout(r,500));
       const frameTimes=[],cpu=[],gpu=[];let last=0,frames=0;
       const started=performance.now();
@@ -44,8 +44,8 @@ try {
     }
     await new Promise(r=>setTimeout(r,1000));const before=renderer.stats.frames;await new Promise(r=>setTimeout(r,400));const idleFrames=renderer.stats.frames-before;
     renderer.dispose();return {device,baselineRafMedianMs:quantile(baseline,.5),baselineRafP95Ms:quantile(baseline,.95),results,idleFrames};
-  });
-  const report={recordedAt:new Date().toISOString(),softwareRequested:software,hardwareRequested:hardware,...result};
-  await mkdir('artifacts',{recursive:true});await writeFile(`artifacts/benchmark-${software?'software':hardware?'hardware':'default'}.json`,JSON.stringify(report,null,2));
+  },spectral);
+  const report={recordedAt:new Date().toISOString(),softwareRequested:software,hardwareRequested:hardware,spectralDispersion:spectral,...result};
+  await mkdir('artifacts',{recursive:true});await writeFile(`artifacts/benchmark-${software?'software':hardware?'hardware':'default'}${spectral?'-spectral':''}.json`,JSON.stringify(report,null,2));
   console.log(JSON.stringify(report,null,2));
 } finally {await browser.close();}

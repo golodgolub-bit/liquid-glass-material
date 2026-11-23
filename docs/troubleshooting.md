@@ -1,45 +1,41 @@
-# Устранение проблем
+# Troubleshooting
 
-## На стекле виден бугор
+## The glass does not distort the page
 
-В старом профиле нормали менялись на всей поверхности и сходились в заметный гребень. В v0.5 ширина оптической области отделена от thickness. В v0.5.1 дополнительно отделена декоративная выпуклая фаска: `bevel:0` по умолчанию, и в демонстрациях она выключена. Преломление сохраняется: `edgeWidth:12` задаёт оптическую область, а не видимую рамку. `bevel:1` намеренно возвращает объёмную фаску. На однотонном фоне внутри стекла не должно появляться самостоятельной светлой каймы.
+Supply the content as a backdrop texture. A canvas shader cannot read arbitrary DOM or native windows behind it. Use a source canvas, media binding, host capture bridge or supported HTML-in-Canvas path. CSS backdrop blur does not provide the same optical path.
 
-Если вы сами выставили edgeWidth 20–32, высокий highlight или magnification >1, линзовый/глянцевый эффект будет сильнее. Проверяйте оптику на одном неподвижном фоне без стилизованного CSS box-shadow и полупрозрачной дублирующей плашки поверх canvas. Тонкая контактная тень и отражение окружения остаются отдельными настройками.
+## Repeated stripes or a blurred grid
 
-## Текст не окрашивается
+Update to the dense-scattering implementation. A sparse stretched blur kernel creates repeated copies of fine lines. Check whether a visible grid is actually part of the source calibration image. The regression suite separately tests checkerboards and thin lines.
 
-Проверьте `vibrancy:true`, alpha маски, общий размер viewport, шрифт, crop и scroll offset. Обычный DOM поверх WebGL не читается shader. Маска должна содержать только символы, а не сплошной непрозрачный фон. См. [Текст под стеклом](text-under-glass.md).
+## A bright raised edge
 
-## Стекло не видит другое стекло
+Set `bevel:0`. Refraction width, bevel shading and contour contrast are independent. Keep `magnification:1` for a flat interior. A custom shader or a strongly distorted calibration background can still produce optical structure; test the finish against a flat background separately.
 
-Обе поверхности должны принадлежать одному renderer и разным group. Передняя должна иметь больший layer или быть добавлена позже при равных layer. Локальные буквы задней панели передаются через content. CSS z-index DOM не меняет порядок GPU-композиции; обычная DOM-надпись поверх canvas не попадёт в снимок автоматически.
+## Dragging stops outside the control
 
-## Захват или drag не работают
+Use `bindDrag` on a semantic element with `touch-action:none`. It retains pointer capture and falls back to window routing if capture is refused. Do not replace the element during the drag. Dispose old bindings before remounting controls. CPU hit tests follow the actual SVG contour and custom rectangular deformation.
 
-Обычная glassButton реагирует на press, но не перемещается без bindDrag. Hit target должен покрывать visualRect и не быть перекрыт другим DOM-элементом. Для SVG-отверстия contains возвращает false намеренно. Не пересоздавайте renderer/сцену во время жеста. BindDrag использует pointer capture и window routing при отказе захвата; на странице должен быть корректный canvas bounding rect и touch-action.
+## Text changes color outside the lens
 
-Если drag конкурирует с постоянной программой координат, приостановите её в onStart. Не записывайте в translate/scale, которыми владеет bindElement, из второго независимого аниматора.
+Clear the mask outside the intended ink and align its dimensions with the backdrop. Use a transparent mask, not an opaque screenshot of the full page. Enable `vibrancy` only on surfaces that should apply the selected color.
 
-## Постоянная анимация остановилась
+## The foreground appears twice
 
-Проверьте Reduced Motion, document visibility, потерю GPU-контекста, pause и cancel. Cancel не возобновляется. Callback с return false завершает программу; ошибка отменяет её и передаётся в onError. Running=true при Reduced Motion означает намерение возобновиться после снятия ограничения, а не обязательный поток кадров прямо сейчас.
+Choose one visible foreground path. Local content can be painted into a surface; an accessible DOM counterpart can remain semantic without duplicating the visible pixels. A selection mask should not become a second sharp text image over strongly scattered text.
 
-## Отражение едва заметно
+## A shader fails to compile
 
-Отражение ограничено Fresnel: на плоской середине при ior=1.48 оно слабее, чем у края. Reflection=1 не делает стекло зеркалом. Ior=1 убирает его вовсе. Сравните достаточно контрастную карту окружения с одинаковым фоном. SetLight меняет направленный свет, не изображение карты. Проверьте decode/CORS и reflectionUploads.
+Inspect the error returned by `setShader`. Managed uniforms need the `uGlass_` prefix and matching GLSL types. Preserve the standard sampler ABI in full fragments. Failed replacement leaves the prior program active. Use `setShader(null)` to restore defaults.
 
-## Полосы, сетка или повторение текста
+## Context loss or excessive memory
 
-Убедитесь, что это не сам calibration backdrop. Не растягивайте редкое blur-ядро на большой радиус и не рисуйте одну и ту же плашку ещё раз CSS backdrop-filter поверх GPU-слоя. В библиотеке используется плотное Gaussian-ядро и mip-предфильтрация; регрессии на checkerboard и одиночной линии проверяются по пикселям. Большое поле SVG при увеличении может показать разрешение 256×256; это другая причина артефактов.
+Context restoration recreates sources, geometry and the shader pipeline. Avoid repeated renderer construction. Dispose textures/bindings through the public lifecycle. Reduce viewport, DPR and overlapping glass depth. Each additional rear-layer dependency can require more full-size targets and scattering passes.
 
-## Частота кадров низкая
+## The scene keeps rendering at rest
 
-Сначала проверьте аппаратный GPU и пустой requestAnimationFrame baseline. Снизьте DPR/quality, размеры исходников и глубину перекрытия; не загружайте неподвижные источники каждый кадр. Texture uploads и blurPasses накопительные. GPU time при наличии timer и CPU submission измеряют разные части кадра. Постоянная программа намеренно рендерит, пока не приостановлена.
+Pause or cancel continuous animation programs. Stop external source-update loops. Keep all material/physics values finite and allow springs to settle. A changing video source legitimately requires fresh capture and scattering.
 
-## Ошибка WebGL или CORS
+## Native hosts look different
 
-Не получайте 2D-контекст на том canvas, где создаётся renderer. Используйте отдельный source canvas. Не читайте и не пишите одну texture attachment. Изображения/видео должны быть загружены и разрешены CORS. При отсутствии WebGL 2 используйте явный fallback; библиотека не включает программный CPU ray tracer.
-
-## Документация или пример дают 404
-
-В dev запустите `npm run dev`, который сначала генерирует public/docs. Production-сайт строится `npm run build:demo` и обслуживается из dist-demo. Не открывайте ESM-пример через file://. Markdown остаётся исходником документации в docs; сгенерированный public/docs не редактируется вручную.
+Confirm hardware WebGL 2, source orientation, device pixel ratio, WebView version, color assumptions and native capture timing. The package is not a native WinUI/Compose shader backend. Use the platform examples as integration starting points and profile on real devices.

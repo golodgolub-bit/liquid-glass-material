@@ -40,9 +40,9 @@ test('thin glass keeps a flat interior instead of a bright medial ridge',async({
 });
 
 test('the documented programmatic example runs real controls and respects pause',async({page})=>{
-  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/examples/programmatic/');await page.getByRole('button',{name:'Запустить движение'}).click();await expect(page.getByRole('button',{name:'Приостановить'})).toHaveAttribute('aria-pressed','true');
-  await expect.poll(()=>page.evaluate(()=>(window as any).programmaticGlass.animation.elapsed)).toBeGreaterThan(.1);await page.getByRole('button',{name:'Приостановить'}).click();
-  await page.locator('#edge').fill('2');expect(await page.evaluate(()=>(window as any).programmaticGlass.lens.state.material.edgeWidth)).toBe(2);expect(await page.locator('#bevel').inputValue()).toBe('0');await page.getByRole('button',{name:'Карта окружения: выкл'}).click();await expect(page.getByRole('button',{name:'Карта окружения: вкл'})).toHaveAttribute('aria-pressed','true');expect(errors).toEqual([]);
+  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/examples/programmatic/');await page.getByRole('button',{name:'Start motion'}).click();await expect(page.getByRole('button',{name:'Pause motion'})).toHaveAttribute('aria-pressed','true');
+  await expect.poll(()=>page.evaluate(()=>(window as any).programmaticGlass.animation.elapsed)).toBeGreaterThan(.1);await page.getByRole('button',{name:'Pause motion'}).click();
+  await page.locator('#edge').fill('2');expect(await page.evaluate(()=>(window as any).programmaticGlass.lens.state.material.edgeWidth)).toBe(2);expect(await page.locator('#bevel').inputValue()).toBe('0');await page.getByRole('button',{name:'Environment: off'}).click();await expect(page.getByRole('button',{name:'Environment: on'})).toHaveAttribute('aria-pressed','true');expect(errors).toEqual([]);
 });
 
 test('unembossed glass still bends rays and a raised bevel remains independently programmable',async({page})=>{
