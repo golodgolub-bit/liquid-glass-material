@@ -1,4 +1,5 @@
 import{GlassRenderer,createGlassShader,slabOpticsGLSL,springFromPhysical,bindDrag,observeSize,type DeformationFunction}from'../../src';
+import '../../src/style.css';
 const $=<T extends HTMLElement=HTMLElement>(s:string)=>document.querySelector<T>(s)!;
 const canvas=$<HTMLCanvasElement>('canvas'),stage=$('.stage'),lensButton=$<HTMLButtonElement>('.lens'),status=$<HTMLOutputElement>('#status'),model=$<HTMLSelectElement>('#model'),code=$<HTMLTextAreaElement>('#code');
 const renderer=new GlassRenderer(canvas,{measureGpu:true}),source=document.createElement('canvas'),mask=document.createElement('canvas'),stopSize=observeSize(renderer);

@@ -1,9 +1,9 @@
 import ts from'typescript';
 import{readFile,writeFile,mkdir}from'node:fs/promises';
-const pages=['quick-start','basic-controls','switches','animation-basics'],files=[];
+const pages=['quick-start','basic-controls','switches','animation-basics','interface-recipes','themes','edge-quality'],files=[];
 await mkdir('artifacts/guide-typecheck',{recursive:true});
-const names=['GlassRenderer','glassToggle','glassSlider','glassButton','glassTabs','glassPopover','glassSheet','bindElement','bindLiquidSelection'];
-const globals={renderer:'Glass.GlassRenderer',surface:'Glass.SurfaceHandle',parent:'HTMLElement',labelCanvas:'HTMLCanvasElement',setting:'Glass.ToggleControl',wifi:'Glass.ToggleControl',volume:'Glass.SliderControl',resize:'ResizeObserver'};
+const names=['GlassRenderer','glassToggle','glassSlider','glassButton','glassTabs','glassPopover','glassSheet','bindElement','bindLiquidSelection','createGlassTextShape','createGlassShapeFromMask','createGlassShader','createMaterial','createPhysics'];
+const globals={renderer:'Glass.GlassRenderer',surface:'Glass.SurfaceHandle',parent:'HTMLElement',labelCanvas:'HTMLCanvasElement',setting:'Glass.ToggleControl',wifi:'Glass.ToggleControl',volume:'Glass.SliderControl',resize:'ResizeObserver',maskCanvas:'HTMLCanvasElement'};
 for(const page of pages){const md=await readFile(`docs/${page}.md`,'utf8');let index=0;
   for(const match of md.matchAll(/```ts\r?\n([\s\S]*?)```/g)){
     const code=match[1].replace(/^import\s[\s\S]*?;\s*$/gm,'');
@@ -14,4 +14,4 @@ for(const page of pages){const md=await readFile(`docs/${page}.md`,'utf8');let i
   }
 }
 const program=ts.createProgram(files,{noEmit:true,strict:true,skipLibCheck:true,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.NodeNext,moduleResolution:ts.ModuleResolutionKind.NodeNext,lib:['lib.es2022.d.ts','lib.dom.d.ts']});
-const errors=ts.getPreEmitDiagnostics(program);if(errors.length){console.error(ts.formatDiagnosticsWithColorAndContext(errors,{getCanonicalFileName:p=>p,getCurrentDirectory:()=>process.cwd(),getNewLine:()=> '\n'}));process.exitCode=1;}else console.log(`Checked ${files.length} TypeScript examples from ${pages.length} foundation guides against built declarations`);
+const errors=ts.getPreEmitDiagnostics(program);if(errors.length){console.error(ts.formatDiagnosticsWithColorAndContext(errors,{getCanonicalFileName:p=>p,getCurrentDirectory:()=>process.cwd(),getNewLine:()=> '\n'}));process.exitCode=1;}else console.log(`Checked ${files.length} TypeScript examples from ${pages.length} developer guides against built declarations`);

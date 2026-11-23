@@ -13,3 +13,5 @@ artifacts/reference-frames/
 *.local
 public/docs/
 artifacts/
+
+dist-html/

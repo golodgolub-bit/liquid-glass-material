@@ -28,6 +28,8 @@ Use one `GlassRenderer` per composited scene. Members of the same optical group 
 
 The renderer owns a single demand-driven animation loop. `addAnimation()` participates in this scheduler; `pause()` stops decorative motion, `cancel()` unregisters it. Reduced Motion bypasses custom deformation and suspends nonessential programs. It does not remove semantic controls or keyboard interaction.
 
+Shape factories accept 32–1024 raster resolution. Text and alpha masks create material boundaries with shared CPU hit testing; they are distinct from local surface content. Cache outlines and preserve their viewBox aspect ratio. `edgeAdaptation` adjusts optical reach in narrow contours. `surface.layer()` changes compositing order without replacing identity; a union changes layer together. See [Interface recipes](interface-recipes.md) and [Edge quality](edge-quality.md).
+
 Custom GLSL uses WebGL 2 / GLSL ES 3.00. Managed uniforms are float, vec2, vec3 or vec4 with the `uGlass_` prefix. `setShader()` compiles all passes before swapping the pipeline; an error leaves the previous program running. Uniform changes reuse the program and invalidate custom scattering as needed.
 
 See [Programming](programmability.md), [Ray optics](ray-optics.md), [Effect containers](containers.md), [Text and icons](text-under-glass.md), [Integration](integration.md) and [Compatibility](apple-audit.md) for complete usage examples and platform boundaries.
@@ -49,6 +51,10 @@ export declare const materialRanges: Readonly<{
         number
     ];
     edgeWidth: readonly [
+        number,
+        number
+    ];
+    edgeAdaptation: readonly [
         number,
         number
     ];
@@ -149,6 +155,8 @@ export interface GlassMaterial {
     thickness: number;
     /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
     edgeWidth: number;
+    /** Reduce optical roll across narrow features and merging necks, [0,1]. */
+    edgeAdaptation: number;
     /** Optional raised edge shading, [0,1]. Disabled by default. */
     bevel: number;
     /** Narrow contrast contour, independent from decorative bevel. */
@@ -195,6 +203,8 @@ export declare const materials: Readonly<{
         thickness: number;
         /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
         edgeWidth: number;
+        /** Reduce optical roll across narrow features and merging necks, [0,1]. */
+        edgeAdaptation: number;
         /** Optional raised edge shading, [0,1]. Disabled by default. */
         bevel: number;
         /** Narrow contrast contour, independent from decorative bevel. */
@@ -243,6 +253,8 @@ export declare const materials: Readonly<{
         appearance: Appearance;
         /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
         edgeWidth: number;
+        /** Reduce optical roll across narrow features and merging necks, [0,1]. */
+        edgeAdaptation: number;
         /** Optional raised edge shading, [0,1]. Disabled by default. */
         bevel: number;
         /** Narrow contrast contour, independent from decorative bevel. */
@@ -286,6 +298,8 @@ export declare const materials: Readonly<{
         appearance: Appearance;
         /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
         edgeWidth: number;
+        /** Reduce optical roll across narrow features and merging necks, [0,1]. */
+        edgeAdaptation: number;
         /** Optional raised edge shading, [0,1]. Disabled by default. */
         bevel: number;
         /** Narrow contrast contour, independent from decorative bevel. */
@@ -323,6 +337,8 @@ export declare const materials: Readonly<{
         thickness: number;
         /** Width of optical lensing in CSS pixels. Independent from decorative bevel. */
         edgeWidth: number;
+        /** Reduce optical roll across narrow features and merging necks, [0,1]. */
+        edgeAdaptation: number;
         /** Optional raised edge shading, [0,1]. Disabled by default. */
         bevel: number;
         /** Narrow contrast contour, independent from decorative bevel. */
@@ -435,6 +451,7 @@ export interface SurfaceOptions {
     sizeAdaptation?: Partial<SizeAdaptation> | false;
 }
 export interface SurfaceState {
+    layer: number;
     rect: Rect;
     visualRect: Rect;
     velocity: Rect;
@@ -521,6 +538,8 @@ export declare class GlassRenderer {
     setInteraction(id: string, pressed: boolean, x?: number, y?: number): void;
     releaseInteractions(): void;
     setShape(id: string, shape: GlassShape | null, options?: MotionOptions): Promise<MotionResult>;
+    /** A union moves as one layer; identity, springs and content remain intact. */
+    setLayer(id: string, layer: number): void;
     setContent(id: string, source: BackdropSource | null): void;
     setContentOpacity(id: string, opacity: number, animate?: boolean): void;
     contains(id: string, x: number, y: number): boolean;
@@ -555,6 +574,7 @@ export declare class SurfaceHandle {
     material(options: Partial<GlassMaterial>, animate?: boolean): this;
     animateMaterial(options: Partial<GlassMaterial>, motion?: MotionOptions): Promise<MotionResult>;
     shape(shape: GlassShape | null, options?: MotionOptions): Promise<MotionResult>;
+    layer(value: number): this;
     content(source: BackdropSource | null): this;
     contentOpacity(opacity: number, animate?: boolean): this;
     contains(x: number, y: number): boolean;
@@ -961,9 +981,14 @@ export interface GlassShape {
         number
     ];
     readonly fillRule: CanvasFillRule;
+    readonly resolution?: number;
+    readonly kind?: 'path' | 'mask' | 'text';
 }
 export declare const shapeResolution = 256;
-/** Rasterized once, uploaded once. Moving/resizing a shape never runs a CPU distance transform. */
+export interface ShapeRasterOptions {
+    resolution?: number;
+}
+/** Rasterized once. Geometry animation never reruns a distance transform. */
 export declare function createGlassShape(options: {
     path: string;
     viewBox?: readonly [
@@ -971,8 +996,25 @@ export declare function createGlassShape(options: {
         number
     ];
     fillRule?: CanvasFillRule;
-}): GlassShape;
-export declare function shapePixels(shape: GlassShape): Uint8Array;
+} & ShapeRasterOptions): GlassShape;
+export interface MaskShapeOptions extends ShapeRasterOptions {
+    source: CanvasImageSource;
+    viewBox?: readonly [
+        number,
+        number
+    ];
+    alphaThreshold?: number;
+}
+/** Alpha defines the contour, including holes. Source RGB is ignored; cross-origin canvas rules apply. */
+export declare function createGlassShapeFromMask(options: MaskShapeOptions): GlassShape;
+export interface TextShapeOptions extends ShapeRasterOptions {
+    text: string;
+    font: string;
+    padding?: number;
+}
+/** Load the desired font before calling. Returned viewBox fits its actual ink bounds plus padding. */
+export declare function createGlassTextShape(options: TextShapeOptions): GlassShape;
+export declare function shapePixels(shape: GlassShape, resolution?: number): Uint8Array;
 export declare function blendShapes(a: GlassShape, b: GlassShape, progress: number): GlassShape;
 export declare function roundedShape(width: number, height: number, radius: number): GlassShape;
 export declare function shapeContains(shape: GlassShape, x: number, y: number): boolean;
@@ -1343,8 +1385,8 @@ export { roundedRectDistance, smoothUnion } from './geometry.js';
 export type { Rect } from './geometry.js';
 export { GlassEffectContainer } from './effect-container.js';
 export type { GlassEffectItem, GlassEffectTransition, GlassEffectContainerOptions } from './effect-container.js';
-export { createGlassShape } from './shape.js';
-export type { GlassShape } from './shape.js';
+export { createGlassShape, createGlassShapeFromMask, createGlassTextShape } from './shape.js';
+export type { GlassShape, ShapeRasterOptions, MaskShapeOptions, TextShapeOptions } from './shape.js';
 export { bindElement, observeSize } from './dom.js';
 export type { ElementBinding } from './dom.js';
 export { glassButton, glassToggle, glassSlider, glassTabs } from './components.js';

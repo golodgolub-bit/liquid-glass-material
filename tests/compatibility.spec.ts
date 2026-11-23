@@ -1,0 +1,14 @@
+import{test,expect}from'@playwright/test';
+test('glyph contours, layered composition and interrupted panel transitions render without GPU errors',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/examples/interface-kit/index.html');await page.waitForFunction(()=>(window as any).interfaceKit?.renderer.stats.frames>0);
+ const initial=await page.evaluate(()=>{const k=(window as any).interfaceKit;return{count:k.clock.length,error:k.renderer.canvas.getContext('webgl2').getError()};});expect(initial).toEqual({count:5,error:0});
+ await page.getByRole('button',{name:'Open Notes',exact:true}).click();await page.waitForFunction(()=>(window as any).interfaceKit.opened);await page.getByRole('button',{name:'Send behind clock',exact:true}).click();expect(await page.evaluate(()=>(window as any).interfaceKit.panel.state.layer)).toBe(1);
+ await page.keyboard.press('Escape');await page.waitForFunction(()=>!(window as any).interfaceKit.opened);await page.getByRole('button',{name:'Compact clock',exact:true}).click();await expect(page.getByRole('button',{name:'Compact clock',exact:true})).toHaveAttribute('aria-pressed','true');expect(errors).toEqual([]);
+});
+test('switch semantics, focus and reduced-transparency behavior survive the browser engine',async({page})=>{
+ await page.goto('/examples/controls/index.html');await page.waitForFunction(()=>(window as any).glassControls?.renderer.stats.frames>0);const toggle=page.getByRole('switch',{name:'Preview connection',exact:true});await toggle.focus();await page.keyboard.press('Space');await expect(toggle).not.toBeChecked();await page.getByRole('checkbox',{name:'Right to left',exact:true}).check();await page.evaluate(()=>(window as any).glassControls.renderer.setAccessibility({reducedMotion:true,reducedTransparency:true}));
+ await page.evaluate(()=>(window as any).glassControls.preview.setPressed(true));expect(await page.evaluate(()=>(window as any).glassControls.preview.surface.state.contentOpacity)).toBe(1);expect(await page.evaluate(()=>(window as any).glassControls.renderer.canvas.getContext('webgl2').getError())).toBe(0);
+});
+test('static documentation and version metadata remain accessible on mobile width',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await page.goto('/examples/index.html');await expect(page.locator('meta[name="liquid-glass-version"]')).toHaveAttribute('content',/\d+\.\d+\.\d+/);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.getByRole('link',{name:'Documentation ↗',exact:true}).click();await page.getByRole('link',{name:'Matching Apple\'s visual behavior',exact:true}).click();await expect(page.getByRole('heading',{name:'Matching Apple\'s visual behavior',exact:true})).toBeVisible();
+});

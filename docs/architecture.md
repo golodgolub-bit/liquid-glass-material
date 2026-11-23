@@ -16,13 +16,13 @@ A front layer never samples its own active framebuffer. Disjoint groups share th
 
 ## Geometry
 
-Rounded rectangles use an analytic distance and gradient. Continuous corners use a configurable exponent; full capsules remain circular. Shared groups use a smooth union. SVG paths are converted once into a 256×256 distance/gradient atlas; movement uses the atlas without CPU recomputation. Even-odd holes remain optically empty and participate in hit testing.
+Rounded rectangles use an analytic distance and gradient. Continuous corners use a configurable exponent; full capsules remain circular. Shared groups use a smooth union. SVG paths, alpha masks and glyphs are converted once into a distance/gradient atlas (256 default, up to 1024); movement uses the atlas without CPU recomputation. Even-odd holes remain optically empty and participate in hit testing.
 
 The material's optical normal bends rays independently from its shading normal. `bevel:0` prevents the refracting edge from automatically becoming a bright raised frame. `edgeContrast` provides a separate thin silhouette contour; `specularIntensity` and `specularWidth` control edge illumination independently from bevel. Standard displacement is limited by edge width to avoid folds and unbounded sampling.
 
 ## Motion and adaptation
 
-Analytic damped springs preserve velocity across retargeting. Geometry, reveal, material, touch, offset, impulse, tone and shape are separate channels. One scheduler runs continuous application programs, integrates springs and draws only while necessary. A coarse CPU source sample is provisional. Per-surface 16x16 GPU tiles measure completed material and rear-layer content; a pixel-pack buffer and nonblocking fence transfer those samples. Regular protection and ink respond to completed measurements. Effective thickness, scattering and shadows follow current geometry without mutating the base material. See [Readability](readability.md) and [Size response](material-response.md).
+Analytic damped springs preserve velocity across retargeting. Geometry, reveal, material, touch, offset, impulse, tone and shape are separate channels. One scheduler runs continuous application programs, integrates springs and draws only while necessary. A coarse CPU source sample is provisional. Native-resolution regional copies are reduced into per-surface 32x32 RGB lower/upper-bound tiles without skipping source pixels; a pixel-pack buffer and nonblocking fence transfer those bounds. Regular protection and ink respond to completed measurements. Effective thickness, scattering and shadows follow current geometry without mutating the base material. See [Readability](readability.md) and [Size response](material-response.md).
 
 ## Extension points
 

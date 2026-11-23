@@ -1,4 +1,5 @@
 import{GlassRenderer,glassToggle,glassButton,glassSlider,observeSize}from'../../src';
+import '../../src/style.css';
 const canvas=document.querySelector('canvas')!,stage=document.querySelector<HTMLElement>('.stage')!,source=document.createElement('canvas'),renderer=new GlassRenderer(canvas);
 const stopResize=observeSize(renderer),background=()=>{
   const r=stage.getBoundingClientRect(),p=Math.min(devicePixelRatio||1,2);source.width=Math.round(r.width*p);source.height=Math.round(r.height*p);const c=source.getContext('2d')!;c.scale(p,p);c.fillStyle='#eef1f3';c.fillRect(0,0,r.width,r.height);

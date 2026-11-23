@@ -49,3 +49,8 @@ const liftedSelection=bindLiquidSelection(renderer,parent,{id:'typed-lift',items
 
 front.contentOpacity(.5).contentOpacity(1,false);void front.state.contentOpacity;
 const typedToggle=glassToggle(renderer,parent,"Typed switch",false,{activeContentOpacity:.05,onOffLabels:true,accentColor:[.2,.7,.3],activeMaterial:{magnification:.8},onChange:checked=>{void checked;}});typedToggle.setPressed(true);typedToggle.setDisabled(false);typedToggle.setChecked(true,false);void typedToggle.trackSurface;typedToggle.dispose();
+
+import {createGlassTextShape,createGlassShapeFromMask} from '../dist/index.js';
+const glyph=createGlassTextShape({text:'8',font:'600 120px system-ui',resolution:512});
+const maskShape=createGlassShapeFromMask({source:document.createElement('canvas'),resolution:256});
+front.layer(3).material({edgeAdaptation:1});void front.shape(glyph);void front.shape(maskShape);void front.state.layer;

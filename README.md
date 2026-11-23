@@ -4,7 +4,7 @@
 
 **A programmable material for light, motion and interface glass.**
 
-[Documentation](docs/index.md) · [API](docs/api.md) · [Download](https://github.com/golodgolub-bit/liquid-glass-material/releases/latest) · [Compatibility](docs/apple-audit.md)
+[Live examples](https://golodgolub-bit.github.io/liquid-glass-material/examples/index.html) · [Documentation](docs/index.md) · [API](docs/api.md) · [Download](https://github.com/golodgolub-bit/liquid-glass-material/releases/latest) · [Compatibility](docs/apple-audit.md)
 
 ![Glass over the pages of Pride and Prejudice — actual WebGL rendering](docs/images/paper.jpg)
 
@@ -40,6 +40,14 @@ Start with [Quick start](docs/quick-start.md), [Basic controls](docs/basic-contr
 
 ![Interactive switches, slider and basic glass motion](docs/images/controls.jpg)
 
+## HTML distribution
+
+Download the [offline HTML archive](https://github.com/golodgolub-bit/liquid-glass-material/releases/download/v0.11.0/liquid-glass-examples-0.11.0.zip), extract it and open `index.html`. To build it yourself, run `npm run build:html`. Each interactive page embeds its JavaScript and CSS. The same folder can be uploaded to a static HTTPS host. All demos compile from the current source. See [Publishing](docs/portable-html.md).
+
+[Clocks and docks](docs/interface-recipes.md) · [Themes](docs/themes.md) · [Native launchers](docs/native-launchers.md) · [Apple matching](docs/apple-matching.md)
+
+![Glass clock and layered dock](docs/images/interface-kit.jpg)
+
 ## Run the examples
 
 ```sh
@@ -47,10 +55,11 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173/` for the laboratory and motion studio. Additional routes:
+Open the local address printed by Vite for the laboratory and motion studio. For portable files, run `npm run build:html` and open `dist-html/index.html`. Additional routes:
 
 | Route | Purpose |
 |---|---|
+| `/examples/interface-kit/` | Glass glyphs, dock magnification and launcher transitions |
 | `/examples/controls/` | Switches, slider and move/reshape/reveal foundations |
 | `/examples/gallery/` | Interactive paper, typography and chromatic studies |
 | `/examples/dispersion/` | Draggable Clear/Regular/diffuse lenses and wavelength controls |
@@ -65,7 +74,7 @@ Open `http://127.0.0.1:5173/` for the laboratory and motion studio. Additional r
 Download the `.tgz` from [Releases](https://github.com/golodgolub-bit/liquid-glass-material/releases/latest), then install it:
 
 ```sh
-npm install ./liquid-glass-material-0.10.0.tgz
+npm install ./liquid-glass-material-0.11.0.tgz
 ```
 
 ```ts

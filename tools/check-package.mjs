@@ -1,8 +1,5 @@
 import { chromium } from '@playwright/test';
-import { existsSync,readdirSync } from 'node:fs';
-import { join } from 'node:path';
-const cache=join(process.env.LOCALAPPDATA ?? '','ms-playwright');
-const executablePath=process.env.CHROMIUM_PATH ?? (existsSync(cache)?readdirSync(cache).filter(n=>n.startsWith('chromium_headless_shell-')).sort().reverse().map(n=>join(cache,n,'chrome-headless-shell-win64','chrome-headless-shell.exe')).find(existsSync):undefined);
+const executablePath=process.env.CHROMIUM_PATH;
 const browser=await chromium.launch({executablePath,headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 try {
   const page=await browser.newPage();await page.goto('http://127.0.0.1:5173/tests/harness.html');

@@ -5,7 +5,7 @@
 Download the package from [GitHub Releases](https://github.com/golodgolub-bit/liquid-glass-material/releases) and install it locally:
 
 ```sh
-npm install ./liquid-glass-material-0.10.0.tgz
+npm install ./liquid-glass-material-0.11.0.tgz
 ```
 
 The package is an ESM distribution with TypeScript declarations and no runtime dependencies. It is not currently published to the npm registry.

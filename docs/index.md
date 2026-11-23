@@ -15,6 +15,8 @@ New to the library? Follow [Quick start](quick-start.md), then [Basic controls](
 
 Run `npm install`, then `npm run dev`. Open `/` for the laboratory, `/examples/gallery/` for editorial material studies, `/examples/workbench/` for the live GLSL editor and `/examples/programmatic/` for continuous animation. `/examples/readability/` exposes contrast and size behavior; `/examples/reference/` provides a fixed comparison fixture. `/examples/dispersion/` compares wavelength-dependent clear and scattered transmission. `/examples/controls/` provides a settings form and an interactive introduction to motion.
 
+Build complete scenes with [Interface recipes](interface-recipes.md), [Themes](themes.md) and [Native launchers](native-launchers.md). Use [Apple matching](apple-matching.md) for calibration, [Edge quality](edge-quality.md) for narrow contours, and [HTML distribution](portable-html.md) for offline files or a public site.
+
 ## Material capabilities
 
 | Area | Available features |

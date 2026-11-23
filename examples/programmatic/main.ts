@@ -1,4 +1,5 @@
 import{GlassRenderer,bindDrag,observeSize}from'../../src';
+import '../../src/style.css';
 const stage=document.querySelector<HTMLElement>('.stage')!,canvas=document.querySelector<HTMLCanvasElement>('canvas')!,button=document.querySelector<HTMLButtonElement>('.lens')!,play=document.querySelector<HTMLButtonElement>('#play')!;
 const renderer=new GlassRenderer(canvas,{measureGpu:true}),background=document.createElement('canvas'),mask=document.createElement('canvas'),environment=document.createElement('canvas');
 const stopSize=observeSize(renderer);

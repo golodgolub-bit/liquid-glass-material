@@ -28,6 +28,8 @@ Use one `GlassRenderer` per composited scene. Members of the same optical group 
 
 The renderer owns a single demand-driven animation loop. `addAnimation()` participates in this scheduler; `pause()` stops decorative motion, `cancel()` unregisters it. Reduced Motion bypasses custom deformation and suspends nonessential programs. It does not remove semantic controls or keyboard interaction.
 
+Shape factories accept 32–1024 raster resolution. Text and alpha masks create material boundaries with shared CPU hit testing; they are distinct from local surface content. Cache outlines and preserve their viewBox aspect ratio. `edgeAdaptation` adjusts optical reach in narrow contours. `surface.layer()` changes compositing order without replacing identity; a union changes layer together. See [Interface recipes](interface-recipes.md) and [Edge quality](edge-quality.md).
+
 Custom GLSL uses WebGL 2 / GLSL ES 3.00. Managed uniforms are float, vec2, vec3 or vec4 with the `uGlass_` prefix. `setShader()` compiles all passes before swapping the pipeline; an error leaves the previous program running. Uniform changes reuse the program and invalidate custom scattering as needed.
 
 See [Programming](programmability.md), [Ray optics](ray-optics.md), [Effect containers](containers.md), [Text and icons](text-under-glass.md), [Integration](integration.md) and [Compatibility](apple-audit.md) for complete usage examples and platform boundaries.

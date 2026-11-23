@@ -1,0 +1,63 @@
+{
+  "recordedAt": "2026-11-23T21:55:05.686Z",
+  "device": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009B41) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "readability": false,
+  "results": [
+    {
+      "surfaces": 5,
+      "edgeAdaptation": 0,
+      "viewport": "800x500 @ 1x",
+      "shapeResolution": 512,
+      "measuredFrames": 60,
+      "gpuMedianMs": 0.709329,
+      "gpuP95Ms": 0.736579,
+      "cpuMedianMs": 2,
+      "cpuP95Ms": 5,
+      "frameP95Ms": 18.599999964237213,
+      "idleFrames": 0,
+      "textureBytes": 5781917.333333334
+    },
+    {
+      "surfaces": 5,
+      "edgeAdaptation": 1,
+      "viewport": "800x500 @ 1x",
+      "shapeResolution": 512,
+      "measuredFrames": 60,
+      "gpuMedianMs": 0.716247,
+      "gpuP95Ms": 0.729913,
+      "cpuMedianMs": 1.5,
+      "cpuP95Ms": 2.5,
+      "frameP95Ms": 17.599999964237213,
+      "idleFrames": 0,
+      "textureBytes": 5781917.333333334
+    },
+    {
+      "surfaces": 24,
+      "edgeAdaptation": 0,
+      "viewport": "800x500 @ 1x",
+      "shapeResolution": 512,
+      "measuredFrames": 60,
+      "gpuMedianMs": 2.394907,
+      "gpuP95Ms": 2.48424,
+      "cpuMedianMs": 6.199999988079071,
+      "cpuP95Ms": 7.699999988079071,
+      "frameP95Ms": 20.599999964237213,
+      "idleFrames": 0,
+      "textureBytes": 5781917.333333334
+    },
+    {
+      "surfaces": 24,
+      "edgeAdaptation": 1,
+      "viewport": "800x500 @ 1x",
+      "shapeResolution": 512,
+      "measuredFrames": 60,
+      "gpuMedianMs": 2.39874,
+      "gpuP95Ms": 2.47949,
+      "cpuMedianMs": 5.299999952316284,
+      "cpuP95Ms": 6.600000023841858,
+      "frameP95Ms": 19.100000023841858,
+      "idleFrames": 0,
+      "textureBytes": 5781917.333333334
+    }
+  ]
+}

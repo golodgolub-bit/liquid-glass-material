@@ -85,3 +85,11 @@ Use the shared scheduler instead of a second permanent `requestAnimationFrame`. 
 `SurfaceOptions.contentOpacity` defaults to 1. `surface.contentOpacity(value, animate = true)` animates the local content alpha independently of the material, on the material spring channel. Values must be finite in [0,1]. The current clamped value is available in `surface.state.contentOpacity`. A full fragment that implements the local-content branch must preserve `uniform float contentOpacity` and multiply it into the content alpha. Template hooks retain this stage automatically. See [Animation basics](animation-basics.md) and [Switches](switches.md).
 
 The `magnification` range is 0.5–2. Values below one minify transmitted content while retaining the same silhouette; one keeps interior scale unchanged. This is a programmable image-scale operation, not proof of a recovered physical Apple lens.
+
+## Material-shaped text, masks and layers
+
+`createGlassTextShape()` creates a reusable glyph contour with transparent counters. `createGlassShapeFromMask()` captures an alpha mask. Both accept `resolution` from 32 to 1024, as does `createGlassShape()`. Cache shapes, load fonts before measuring, and preserve their viewBox aspect ratio. These factories define the material boundary; `surface.content()` instead paints content over a boundary. See [Clocks, docks and launcher transitions](interface-recipes.md).
+
+`edgeAdaptation` defaults to 1 and shortens optical reach in thin strokes and union necks. Set it to 0 for the older enclosing-rectangle reach, or replace `optics` for a different lens profile. Decorative `bevel` remains independent. [Edge quality](edge-quality.md) explains distance fields, normal encoding and custom-shader migration.
+
+`surface.layer(value)` and `renderer.setLayer(id, value)` reorder existing surfaces without replacing springs, content or identity. The value must be finite. Members of a union move together; semantic DOM order remains application-owned. [Theme architecture](themes.md) and [Native launchers](native-launchers.md) describe how these primitives fit into an application or host shell.

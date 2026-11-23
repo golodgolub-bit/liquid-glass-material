@@ -41,7 +41,7 @@ await surface.shape(droplet);
 await surface.shape(null); // rounded rectangle again
 ```
 
-Morphing uses cached signed-distance fields. An interrupted morph retains its intermediate boundary. The shape atlas is 256×256; highly detailed contours can exceed its resolution. Even-odd holes and CPU hit tests are supported. Use a pure `deform` callback for velocity-dependent rectangular stretch.
+Morphing uses cached signed-distance fields. An interrupted morph retains its intermediate boundary. Contour resolution defaults to 256 and can be configured up to 1024; the atlas uses the highest active resolution. Cache shapes and inspect highly detailed outlines at their intended display size. Even-odd holes and CPU hit tests are supported. Use a pure `deform` callback for velocity-dependent rectangular stretch.
 
 ## Clean up
 

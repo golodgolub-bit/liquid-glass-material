@@ -58,7 +58,7 @@ export interface SurfaceOptions {
   contrast?:ContrastSettings|false;
   sizeAdaptation?:Partial<SizeAdaptation>|false;
 }
-export interface SurfaceState { rect: Rect; visualRect: Rect; velocity:Rect;visibility: number;contentOpacity:number; pressed: number; energy: number; moving: boolean; material: Readonly<GlassMaterial>;baseMaterial:Readonly<GlassMaterial>;contrast:Readonly<ContrastState> }
+export interface SurfaceState { layer:number; rect: Rect; visualRect: Rect; velocity:Rect;visibility: number;contentOpacity:number; pressed: number; energy: number; moving: boolean; material: Readonly<GlassMaterial>;baseMaterial:Readonly<GlassMaterial>;contrast:Readonly<ContrastState> }
 export interface RenderStats {
   frames: number; cpuMs: number; gpuMs: number | null;
   drawCalls: number; uploads: number; blurPasses: number;
@@ -80,7 +80,7 @@ interface Surface {
   contrastWaiters:Set<(state:Readonly<ContrastState>|null)=>void>;contrastWaitRevision:number;sizeAdaptation:Readonly<SizeAdaptation>|null;
 }
 interface ContrastProbe{surface:Surface;protection:number;color:RGB;revision:number}
-const materialKeys = ['thickness','edgeWidth','bevel','edgeContrast','specularIntensity','specularWidth','shadowRadius','shadowOffset','scatterRadius','ambientSpill','refraction','magnification','dispersion','ior','outsideIor','abbeNumber','reflection','cornerPower','frost','tintOpacity','saturation','highlight','shadow','dimming'] as const;
+const materialKeys = ['thickness','edgeWidth','edgeAdaptation','bevel','edgeContrast','specularIntensity','specularWidth','shadowRadius','shadowOffset','scatterRadius','ambientSpill','refraction','magnification','dispersion','ior','outsideIor','abbeNumber','reflection','cornerPower','frost','tintOpacity','saturation','highlight','shadow','dimming'] as const;
 interface Program { handle: WebGLProgram; uniforms: Map<string, WebGLUniformLocation | null> }
 interface Target { texture: WebGLTexture; framebuffer: WebGLFramebuffer }
 interface TimerExtension { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }
@@ -126,7 +126,7 @@ export class GlassRenderer {
   private reveals = new Float32Array(32);
   private shapeIndices=new Int32Array(32);
   private shapeFromIndices=new Int32Array(32);private shapeBlends=new Float32Array(32);
-  private shapeTexture!:WebGLTexture;private shapeAtlas:GlassShape[]=[];private shapeAtlasDirty=true;
+  private shapeAtlasResolution=shapeResolution;private shapeTexture!:WebGLTexture;private shapeAtlas:GlassShape[]=[];private shapeAtlasDirty=true;
   private timer: TimerExtension | null = null;
   private queries: WebGLQuery[] = [];
   private light: [number, number] = [-0.65, -0.76];
@@ -323,7 +323,7 @@ export class GlassRenderer {
     return {rect,visualRect,visibility:reveal,pressed:press,energy:Math.abs(s.impulse.value)};
   }
   private velocity(s:Surface):Rect{return Object.fromEntries(rectKeys.map(k=>[k,s.motion[k].velocity]))as unknown as Rect;}
-  getState(id: string): SurfaceState {const s=this.surface(id);return{...this.pose(s),contentOpacity:Math.max(0,Math.min(1,s.contentOpacity.value)),velocity:this.velocity(s),moving:this.springs(s).some(spring=>!isResting(spring)),material:this.currentMaterial(s),baseMaterial:this.currentMaterial(s,false),contrast:{...s.contrastState,protection:s.readability.value}};}
+  getState(id: string): SurfaceState {const s=this.surface(id);return{layer:s.layer,...this.pose(s),contentOpacity:Math.max(0,Math.min(1,s.contentOpacity.value)),velocity:this.velocity(s),moving:this.springs(s).some(spring=>!isResting(spring)),material:this.currentMaterial(s),baseMaterial:this.currentMaterial(s,false),contrast:{...s.contrastState,protection:s.readability.value}};}
   configureContrast(id:string,options:ContrastSettings|false):void{this.assertAlive();const s=this.surface(id),policy=options===false?null:createContrast(options,s.contrast??undefined);for(const peer of this.groupMembers.get(s.group)!){peer.contrast=policy;if(!policy){peer.readability.snap(0);peer.readability.target=0;peer.contrastState.source='pending';this.adaptSurface(peer,true);for(const waiter of peer.contrastWaiters)waiter(null);peer.contrastWaiters.clear();}}this.invalidate();}
   configureSizeAdaptation(id:string,options:Partial<SizeAdaptation>|false):void{this.assertAlive();const s=this.surface(id),profile=options===false?null:createSizeAdaptation(options);for(const peer of this.groupMembers.get(s.group)!)peer.sizeAdaptation=profile;this.invalidate();}
   whenContrastReady(id:string):Promise<Readonly<ContrastState>|null>{this.assertAlive();const s=this.surface(id);if(!s.contrast||this.options.readability===false||s.reveal.target===0)return Promise.resolve(null);if(s.contrastState.source==='composited'&&!this.contrastDirty&&!this.contrastSampler.pending)return Promise.resolve({...s.contrastState});return new Promise(resolve=>{s.contrastWaiters.add(resolve);this.contrastUrgent=true;this.invalidate();s.contrastWaitRevision=this.contrastRevision;});}
@@ -398,6 +398,8 @@ export class GlassRenderer {
     }
     this.invalidate();return this.whenSettled(id);
   }
+  /** A union moves as one layer; identity, springs and content remain intact. */
+  setLayer(id:string,layer:number):void{this.assertAlive();if(!Number.isFinite(layer))throw new RangeError('Layer must be finite');const s=this.surface(id);for(const peer of this.groupMembers.get(s.group)!)peer.layer=layer;this.invalidate();}
   setContent(id:string,source:BackdropSource|null):void{this.assertAlive();const s=this.surface(id);s.content=source;s.contentDirty=true;this.invalidate();}
   setContentOpacity(id:string,opacity:number,animate=true):void{this.assertAlive();if(!Number.isFinite(opacity)||opacity<0||opacity>1)throw new RangeError('Content opacity must be in [0,1]');const s=this.surface(id);s.contentOpacity.target=opacity;if(!animate||this.settings.reducedMotion)s.contentOpacity.snap();this.invalidate();}
   contains(id:string,x:number,y:number):boolean{
@@ -514,8 +516,9 @@ export class GlassRenderer {
     if(active.length!==this.shapeAtlas.length||active.some((s,i)=>s!==this.shapeAtlas[i])){this.shapeAtlas=active;this.shapeAtlasDirty=true;}
     const gl=this.gl;gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.shapeTexture);
     if(!this.shapeAtlasDirty)return;
-    gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA8,shapeResolution,shapeResolution,Math.max(1,active.length),0,gl.RGBA,gl.UNSIGNED_BYTE,null);
-    active.forEach((s,i)=>gl.texSubImage3D(gl.TEXTURE_2D_ARRAY,0,0,0,i,shapeResolution,shapeResolution,1,gl.RGBA,gl.UNSIGNED_BYTE,shapePixels(s)));
+    const n=this.shapeAtlasResolution=Math.max(shapeResolution,...active.map(s=>s.resolution??shapeResolution));
+    gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA8,n,n,Math.max(1,active.length),0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    active.forEach((s,i)=>gl.texSubImage3D(gl.TEXTURE_2D_ARRAY,0,0,0,i,n,n,1,gl.RGBA,gl.UNSIGNED_BYTE,shapePixels(s,n)));
     this.shapeAtlasDirty=false;
   }
   private uploadContents(){
@@ -736,7 +739,7 @@ export class GlassRenderer {
       if (query) { gl.endQuery(this.timer!.TIME_ELAPSED_EXT); this.queries.push(query); }
       this.metrics.frames++; this.metrics.cpuMs = performance.now()-start;
       this.metrics.groups = groups.size; this.metrics.surfaces = this.surfaces.size; this.metrics.pixelRatio = this.ratio;
-      this.metrics.textureBytes = (this.sourceWidth*this.sourceHeight*4/3 + this.vibrantWidth*this.vibrantHeight+2*this.blurWidth*this.blurHeight+2*this.wideWidth*this.wideHeight + this.canvas.width*this.canvas.height+(this.targets.length>4?2*this.canvas.width*this.canvas.height+2*this.blurWidth*this.blurHeight+2*this.wideWidth*this.wideHeight:0)+shapeResolution**2*Math.max(1,this.shapeAtlas.length))*4;
+      this.metrics.textureBytes = (this.sourceWidth*this.sourceHeight*4/3 + this.vibrantWidth*this.vibrantHeight+2*this.blurWidth*this.blurHeight+2*this.wideWidth*this.wideHeight + this.canvas.width*this.canvas.height+(this.targets.length>4?2*this.canvas.width*this.canvas.height+2*this.blurWidth*this.blurHeight+2*this.wideWidth*this.wideHeight:0)+this.shapeAtlasResolution**2*Math.max(1,this.shapeAtlas.length))*4;
       for(const s of this.surfaces.values())this.metrics.textureBytes+=s.contentBytes;
       this.metrics.textureBytes+=this.reflectionWidth*this.reflectionHeight*4+this.contrastSampler.bytes;
       for (const listener of this.listeners) listener(this.stats);
@@ -777,7 +780,7 @@ export class GlassRenderer {
     gl.uniform3f(this.uniform(p,'physical'),m.ior,m.reflection,m.cornerPower);
     gl.uniform2f(this.uniform(p,'medium'),m.outsideIor,this.quality==='low'?0:m.abbeNumber);
     gl.uniform3fv(this.uniform(p,'absorption'),m.absorption);
-    gl.uniform1f(this.uniform(p,'edgeWidth'),m.edgeWidth);gl.uniform1f(this.uniform(p,'bevelStrength'),m.bevel);gl.uniform1f(this.uniform(p,'edgeContrast'),m.edgeContrast);gl.uniform1f(this.uniform(p,'edgeLimit'),Math.min(...list.map(s=>Math.min(s.motion.width.value,s.motion.height.value)*.225)));
+    gl.uniform1f(this.uniform(p,'edgeAdaptation'),m.edgeAdaptation);gl.uniform1f(this.uniform(p,'edgeWidth'),m.edgeWidth);gl.uniform1f(this.uniform(p,'bevelStrength'),m.bevel);gl.uniform1f(this.uniform(p,'edgeContrast'),m.edgeContrast);gl.uniform1f(this.uniform(p,'edgeLimit'),Math.min(...list.map(s=>Math.min(s.motion.width.value,s.motion.height.value)*.225)));
     gl.uniform4f(this.uniform(p,'finish'),m.saturation,m.highlight,m.shadow*(0.7+first.detail*0.6),m.dimming);
     gl.uniform4f(this.uniform(p,'tint'),...m.tint,m.tintOpacity);
     gl.uniform4f(this.uniform(p,'mode'),first.variantMix.value,first.tone.value,+this.settings.reducedTransparency,+this.settings.increasedContrast);
@@ -819,6 +822,7 @@ export class SurfaceHandle {
   material(options: Partial<GlassMaterial>,animate = true): this { this.renderer.setMaterial(this.id,options,animate); return this; }
   animateMaterial(options:Partial<GlassMaterial>,motion?:MotionOptions):Promise<MotionResult>{return this.renderer.animateMaterial(this.id,options,motion);}
   shape(shape:GlassShape|null,options?:MotionOptions):Promise<MotionResult>{return this.renderer.setShape(this.id,shape,options);}
+  layer(value:number):this{this.renderer.setLayer(this.id,value);return this;}
   content(source:BackdropSource|null):this{this.renderer.setContent(this.id,source);return this;}
   contentOpacity(opacity:number,animate=true):this{this.renderer.setContentOpacity(this.id,opacity,animate);return this;}
   contains(x:number,y:number):boolean{return this.renderer.contains(this.id,x,y);}

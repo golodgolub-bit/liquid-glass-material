@@ -8,7 +8,7 @@ test('documentation pages link to the complete API and a runnable text/reflectio
   await page.goto('/docs/api.html');await expect(page.getByRole('heading',{name:'GlassMaterial',exact:true})).toBeVisible();
   const malformed=await page.locator('table').evaluateAll(tables=>tables.flatMap(t=>{const width=t.querySelectorAll('thead th').length;return[...t.querySelectorAll('tbody tr')].filter(row=>row.querySelectorAll('td').length!==width).map(row=>row.textContent);}));expect(malformed).toEqual([]);
   await page.locator('#filter').fill('light and reflections');await expect(page.locator('#pages a:visible')).toHaveCount(1);await page.locator('#pages a:visible').click();await expect(page.getByRole('heading',{name:'Light and reflections',exact:true})).toBeVisible();
-  await page.getByRole('link',{name:'Live example',exact:true}).click();await expect(page.getByRole('heading',{name:'One material. Your behavior.',exact:true})).toBeVisible();
+  await page.getByRole('link',{name:'Live example',exact:true}).click();await expect(page.getByRole('heading',{name:'Programmable material',exact:true})).toBeVisible();
 });
 test('documentation remains readable on a narrow viewport',async({page})=>{
   await page.setViewportSize({width:360,height:800});await page.goto('/docs/text-under-glass.html');await expect(page.getByRole('heading',{name:'Text and icons under glass',exact:true})).toBeVisible();

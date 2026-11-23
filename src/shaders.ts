@@ -52,7 +52,7 @@ uniform float contentOpacity;
 uniform vec3 physical; // ior, environment reflection, corner power
 uniform vec2 medium; // surrounding IOR, Vd (0 disables Cauchy dispersion)
 uniform vec3 absorption; // Beer-Lambert extinction per CSS pixel
-uniform float edgeWidth;uniform float edgeLimit;uniform float bevelStrength;uniform float edgeContrast;
+uniform float edgeWidth;uniform float edgeLimit;uniform float edgeAdaptation;uniform float bevelStrength;uniform float edgeContrast;
 uniform vec4 edgeFinish; // specular intensity/width, shadow radius/offset
 uniform vec2 diffusion; // effective scatter radius, ambient spill
 uniform vec4 readability; // protective RGB and opacity
@@ -85,10 +85,12 @@ vec3 contour(vec2 p,int i,int index) {
     vec2 size=shapes[i].zw*2.0,local=(p-shapes[i].xy)/size+.5;
     vec4 sampleField=texture(shapeMaps,vec3(clamp(local,0.0,1.0),float(index)));
     float distanceUnit=(dot(sampleField.rg,vec2(65280.0,255.0))/65535.0-.5)*4.0;
-    vec2 gradient=(sampleField.ba*2.0-1.0)/size;float len=max(length(gradient),.00001);
+    vec2 raw=(sampleField.ba*255.0-128.0)/127.0,gradient=raw/size;
+    // Distance scaling must not diverge when opposite gradients cancel at a medial axis.
+    float metric=max(length(gradient)/max(length(raw),.01),1.0/max(size.x,size.y));
     vec2 outside=(local-clamp(local,0.0,1.0))*size;
     float outsideLength=length(outside);
-    return vec3(distanceUnit/len+outsideLength,outsideLength>.001?outside/outsideLength:gradient/len);
+    return vec3(distanceUnit/metric+outsideLength,outsideLength>.001?outside/outsideLength:gradient/metric);
   }
   return geometry(p,shapes[i],radii[i]);
 }
@@ -148,11 +150,21 @@ void main() {
   vec2 grad = boundary.yz;
   float gradientLength=length(grad);
   vec2 n = grad / max(gradientLength, 0.0001);
-  float depth = max(-d, 0.0), bevel = max(min(edgeWidth,edgeLimit),0.001);
+  float depth = max(-d, 0.0), baseWidth=min(edgeWidth,edgeLimit), opticalWidth=baseWidth;
+  // Estimate the opposite boundary along the inward normal. A narrow glyph stroke
+  // or a union neck needs a shorter optical roll than its enclosing rectangle.
+  if(edgeAdaptation>.001&&depth<baseWidth&&gradientLength>.01&&(count>1||shapeIndices[0]>=0||shapeFromIndices[0]>=0)){
+    float reach=baseWidth*2.0;
+    vec4 opposite=glassField(p-n*reach);
+    float confidence=smoothstep(.2,.8,-dot(n,opposite.yz/max(length(opposite.yz),.0001)));
+    float localWidth=max(.001,(depth+reach-opposite.x)*.225);
+    opticalWidth=mix(baseWidth,min(baseWidth,localWidth),confidence*edgeAdaptation);
+  }
+  float bevel=max(opticalWidth,.001);
   float t=clamp(depth/bevel,0.0,1.0);
   // Optical normals bend the transmitted ray. Shading normals are independent:
   // a lensing boundary must not automatically become a raised, embossed frame.
-  GlassOpticalInput opticalInput=GlassOpticalInput(depth,min(edgeWidth,edgeLimit),optics.x,optics.y,physical.x/medium.x,grad,presence);
+  GlassOpticalInput opticalInput=GlassOpticalInput(depth,opticalWidth,optics.x,optics.y,physical.x/medium.x,grad,presence);
   GlassOpticalSample optical=glassOptics(opticalInput);
   vec3 opticalNormal=normalize(optical.normal);
   vec3 normal=normalize(mix(vec3(0,0,1),opticalNormal,bevelStrength));
@@ -218,16 +230,16 @@ void main() {
   // A sub-pixel contrast contour defines the silhouette without embossing a rim.
   c*=1.0-exp(-depth*2.8)*edgeContrast*presence;
   c+=vec3(1.0,0.985,0.96)*(keyGlare+fillGlare*0.4)*bezel*finish.y*0.03*bevelStrength;
-  float specularRim=exp(-depth/max(edgeFinish.y,.1));
+  float specularRim=exp(-depth/max(edgeFinish.y*min(1.0,bevel/max(baseWidth,.001)),.1));
   float edgeLight=pow(max(facing,0.0),8.0)+pow(max(-facing,0.0),12.0)*.32;
-  c+=vec3(1.0,.985,.96)*specularRim*edgeLight*edgeFinish.x*finish.y*.8;
+  c+=vec3(1.0,.985,.96)*specularRim*edgeLight*min(gradientLength,1.0)*edgeFinish.x*finish.y*.8;
   c+=rim*.025*bevelStrength*finish.y;
   c-=rim*pow(max(-facing,0.0),2.0)*0.12*finish.y*bevelStrength;
   // A broad response under the finger, without periodic water ripples.
   float glow=exp(-distance(p,touch.xy)/95.0)*touch.z;
   c+=vec3(0.018,0.022,0.028)*glow;
   float sweep=pow(max(dot(n,normalize(light+vec2(touch.w*0.65,-touch.w*0.3))),0.0),10.0);
-  c+=vec3(1.0,0.98,0.94)*bezel*sweep*touch.w*finish.y*0.12;
+  c+=vec3(1.0,0.98,0.94)*bezel*sweep*min(gradientLength,1.0)*touch.w*finish.y*0.12;
   // Sub-LSB static dither avoids 8-bit gradient bands; never changes at rest.
   float dither=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))))-.5;
   c+=dither/255.0;

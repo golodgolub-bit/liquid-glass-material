@@ -1,5 +1,18 @@
 # Performance
 
+## v0.11: thin glyph contours
+
+24 November 2026, Windows / Edge / Intel UHD Graphics (0x9B41), ANGLE D3D11; 800×500 at DPR 1. Each scene reuses one cached 512-resolution glyph contour and moves disjoint copies continuously. Readability is disabled to isolate contour rendering. Thirty warmup frames precede 60 measured frames per case.
+
+| Glyph surfaces | Edge adaptation | GPU median / p95 | CPU median / p95 | Frame p95 | Idle frames |
+|---|---|---:|---:|---:|---:|
+| 5 | Off | 0.71 / 0.74 ms | 2.0 / 5.0 ms | 18.6 ms | 0 |
+| 5 | On | 0.72 / 0.73 ms | 1.5 / 2.5 ms | 17.6 ms | 0 |
+| 24 | Off | 2.39 / 2.48 ms | 6.2 / 7.7 ms | 20.6 ms | 0 |
+| 24 | On | 2.40 / 2.48 ms | 5.3 / 6.6 ms | 19.1 ms | 0 |
+
+[Raw report](benchmarks/v0.11-contours-hardware.json) and [benchmark source](../tools/benchmark-contours.mjs). The extra field lookup has little measured GPU cost in these small disjoint scenes. Separate short runs contain noise: lower CPU/frame values with adaptation enabled are not evidence of a speedup. Frame p95 still exceeds the 16.67 ms budget. Complex unions, overlapping glyphs, distinct atlas layers and higher DPR can cost substantially more. The cached shape is shared, so this report does not measure an atlas containing 24 distinct outlines. Shape construction is excluded. No mobile or 120 Hz guarantee follows from these results.
+
 ## v0.10: interactive switch composition
 
 23 November 2026, Windows / Edge / Intel UHD Graphics (0x9B41), ANGLE D3D11; 800×500 at DPR 1. Each switch has two compositor surfaces: its painted rail and its pressed glass thumb. A program retargets states at 3 Hz; 30 warmup frames precede 60 measured frames. This measures rendering, not pointer latency. Labels sit outside the lenses, so there are no foreground readability probes in this scene.
