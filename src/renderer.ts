@@ -7,9 +7,9 @@ import {createPhysics,type GlassPhysics,type PhysicsOptions,type DeformationFunc
 import { configureSpring, isResting, type MotionOptions, type MotionResult, type SpringOptions } from './motion.js';
 import {shapePixels,shapeDistance,shapeResolution,blendShapes,roundedShape,type GlassShape} from './shape.js';
 import {GlassAnimation,type AnimationCallback,type AnimationOptions} from './animation.js';
-import{createContrast,evaluateContrast,contrastRatio,foregroundColors,protectionColors,type ContrastSettings,type ContrastOptions,type ContrastState}from'./contrast.js';
+import{createContrast,evaluateContrast,foregroundColors,protectionColors,type ContrastSettings,type ContrastOptions,type ContrastState}from'./contrast.js';
 import{ContrastSampler}from'./contrast-sampler.js';
-import{createSizeAdaptation,resolveMaterialForSize,type SizeAdaptation}from'./size-adaptation.js';
+import{createSizeAdaptation,resolveMaterialForSize,measureMaterialFootprint,type SizeAdaptation}from'./size-adaptation.js';
 
 /** Canvas/image/video sources with consistent WebGL upload orientation. Draw ImageBitmap/ImageData/VideoFrame into a canvas first. */
 export type BackdropSource = HTMLCanvasElement | OffscreenCanvas | HTMLImageElement | HTMLVideoElement;
@@ -306,7 +306,7 @@ export class GlassRenderer {
     }
     if(!adapt||!s.sizeAdaptation){if(adapt)this.materialCache.set(s,base);return base;}
     const members=this.groupMembers.get(s.group)!,rects=[...members].map(peer=>this.getRect(peer.id));
-    const resolved=resolveMaterialForSize(base,{width:Math.max(...rects.map(r=>r.x+r.width))-Math.min(...rects.map(r=>r.x)),height:Math.max(...rects.map(r=>r.y+r.height))-Math.min(...rects.map(r=>r.y))},s.sizeAdaptation);this.materialCache.set(s,resolved);return resolved;
+    const resolved=resolveMaterialForSize(base,measureMaterialFootprint(rects),s.sizeAdaptation);this.materialCache.set(s,resolved);return resolved;
   }
   private pose(s:Surface){
     const rect=this.getRect(s.id),press=this.settings.reducedMotion?0:Math.max(0,Math.min(2,s.press.value));
@@ -572,7 +572,7 @@ export class GlassRenderer {
     const r=this.pose(s).visualRect,a=s.contrast!.region,p=this.ratio;
     const bounds=[Math.max(0,Math.floor((r.x+r.width*a.x)*p)),Math.max(0,Math.floor((this.height-r.y-r.height*(a.y+a.height))*p)),Math.min(this.canvas.width,Math.ceil((r.x+r.width*(a.x+a.width))*p)),Math.min(this.canvas.height,Math.ceil((this.height-r.y-r.height*a.y)*p))]as const;
     if(bounds[2]<=bounds[0]||bounds[3]<=bounds[1]){for(const waiter of s.contrastWaiters)waiter(null);s.contrastWaiters.clear();return;}
-    this.contrastSampler.capture(framebuffer,bounds,{surface:s,protection:this.uniform(this.programs.glass,'readability')?owner.readability.value:0,color:protectionColors[owner.contrastState.foreground],revision:this.contrastRevision});this.metrics.contrastCopies++;
+    this.metrics.drawCalls+=this.contrastSampler.capture(framebuffer,bounds,{surface:s,protection:this.uniform(this.programs.glass,'readability')?owner.readability.value:0,color:protectionColors[owner.contrastState.foreground],revision:this.contrastRevision});this.metrics.contrastCopies++;
   }
   private pollContrast():void{
     const results=this.contrastSampler?.poll();if(!results?.length)return;this.metrics.contrastReadbacks++;
@@ -590,7 +590,7 @@ export class GlassRenderer {
       const protection=owner.material.variant==='regular'&&this.uniform(this.programs.glass,'readability')?policy.protection:0;
       const result=evaluateContrast(group.raw,{...policy,minimumRatio,protection},owner.contrastState.foreground,this.fixedForeground(owner));
       const luminances=group.raw.map(rgb=>(rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722)),mean=luminances.reduce((a,b)=>a+b,0)/luminances.length,detail=Math.min(1,Math.sqrt(luminances.reduce((sum,v)=>sum+(v-mean)**2,0)/luminances.length)*4);
-      const actualRatio=Math.min(...group.actual.map(rgb=>contrastRatio(foregroundColors[result.foreground],rgb)));
+      const actualRatio=evaluateContrast(group.actual,{...policy,minimumRatio,protection:0},result.foreground,result.foreground).ratio;
       const changed=owner.contrastState.foreground!==result.foreground,needsUpdate=Math.abs(owner.readability.target-result.protection)>.003;
       for(const s of this.groupMembers.get(key)??[]){
         s.detail=detail;
@@ -712,7 +712,11 @@ export class GlassRenderer {
         if(depth)gl.uniform4f(this.uniform(p,'scrollEdges'),0,0,0,0);
         for(const entry of entries)if(entry.depth===depth){
           gl.uniform1f(this.uniform(p,'contentOnly'),0);if(entry.list[0].material.variant!=='identity')this.drawGroup(p,entry.list);
-          if(probing)for(const s of entry.list)if(s.contrast&&s.reveal.value>.001)this.captureContrast(s,entry.list[0],scene);
+          if(probing){
+            for(const s of entry.list)if(s.contrast&&s.reveal.value>.001)this.captureContrast(s,entry.list[0],scene);
+            gl.useProgram(p.handle);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.enable(gl.BLEND);gl.enable(gl.SCISSOR_TEST);gl.enable(gl.DITHER);
+            this.bindTexture(depth?this.targets[5].texture:this.texture,0);this.bindTexture(this.targets[depth?7:1].texture,1);
+          }
           for(const s of entry.list)if(s.contentTexture){this.bindTexture(s.contentTexture,5);gl.uniform1f(this.uniform(p,'contentOnly'),1);this.drawGroup(p,[s]);}gl.uniform1f(this.uniform(p,'contentOnly'),0);
           if(stacked&&this.options.drawBackdrop===false){
             gl.bindFramebuffer(gl.FRAMEBUFFER,null);if(entry.list[0].material.variant!=='identity')this.drawGroup(p,entry.list);for(const s of entry.list)if(s.contentTexture){this.bindTexture(s.contentTexture,5);gl.uniform1f(this.uniform(p,'contentOnly'),1);this.drawGroup(p,[s]);}gl.uniform1f(this.uniform(p,'contentOnly'),0);gl.bindFramebuffer(gl.FRAMEBUFFER,scene);

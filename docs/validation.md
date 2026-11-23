@@ -1,6 +1,6 @@
 # Validation
 
-Local v0.8.1 verification covers **23 unit tests and 57 browser checks** on the hardware path below. NodeNext declarations, built ESM rendering, demo and host-asset builds are checked separately.
+Local v0.9.0 verification covers **25 unit tests and 62 browser checks** on the hardware path below. NodeNext declarations, built ESM rendering, demo and host-asset builds are checked separately.
 
 ## Automated checks
 
@@ -15,7 +15,7 @@ The unit suite verifies spring integration, retargeting, physical spring convers
 
 Browser coverage includes refraction, layered glass/local content, free contours and holes, shape interruption, touch/drag outside the original hit box, pointer-capture fallback, semantic keyboard controls, text recoloring, context loss/restoration, shader rollback, custom uniforms/scattering and reduced-motion policy. Regression scenes cover fine patterns, a thin line and background crop/resize. Effect container tests cover stable identities, interruption and namespace isolation.
 
-New checks measure actual rear-content foreground contrast, Clear on white, protection over black/white input, zero idle sampling, independent edge illumination at zero bevel, continuous size response, pending-work cancellation, fresh-data readiness and context recovery. The interactive response example is exercised through real controls.
+New checks measure actual rear-content foreground contrast, Clear on white, protection over black/white input, zero idle sampling, independent edge illumination at zero bevel, continuous size response, pending-work cancellation, fresh-data readiness and context recovery. New v0.9 regressions cover single-pixel dots/stripes, conservative insufficient-budget diagnostics, full-scattering dispersion, custom selection lift profiles and the optical study on desktop/mobile. The interactive examples are exercised through real controls.
 
 Documentation checks verify page availability, navigation, generated reference tables and narrow-screen layout. The built package is loaded and rendered separately with `tools/check-package.mjs`. `tools/type-consumer.ts` compiles declarations in NodeNext mode independently of Vite.
 

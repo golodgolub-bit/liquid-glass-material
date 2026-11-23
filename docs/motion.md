@@ -29,3 +29,23 @@ The physical `damping` above is viscous resistance, not the normalized ratio. `s
 ## Reduced Motion
 
 Reduced Motion snaps finite spring targets, bypasses velocity deformation and custom deformation, and suspends nonessential animation programs. Semantic selection and keyboard operation continue to work. Explicit `accessibility` overrides can be supplied by a native host. Test this policy live when settings change, rather than only during initialization.
+
+## Programmable selection lift
+
+`bindLiquidSelection` has an independent lift profile. Scale is relative to the resting item's width/height; offset uses renderer CSS pixels. Tracking and release springs control different phases without restarting the current velocity. Material fields use the normal interruptible material springs. The default profile remains an independently selected library preset.
+
+```ts
+const selection = bindLiquidSelection(renderer, rail, {
+  id: 'navigation', items: buttons,
+  physics: { press: { frequency: 4.2, damping: 0.95 }, maxStretch: 0.07 },
+  material: { variant: 'clear', dispersion: 0.35 },
+  lift: {
+    scale: [1.15, 1.6], offset: [0, -4],
+    trackingSpring: { frequency: 12, damping: 1 },
+    releaseSpring: { frequency: 4, damping: 0.9 },
+    material: { refraction: 16, magnification: 1.18, abbeNumber: 58 }
+  }
+});
+```
+
+Releasing selects the nearest item and restores the resting material and geometry. Cancellation restores the previous selection. Reduced Motion retains semantic selection and snaps geometry; pointer capture, keyboard arrows/Home/End and cleanup remain managed by the binding. `selection.surface` exposes the normal shader/material/physics API for further programming.

@@ -610,6 +610,12 @@ export interface ContrastEvaluation {
     protection: number;
     meetsTarget: boolean;
 }
+export interface ContrastBounds {
+    minimum: RGB;
+    maximum: RGB;
+}
+/** Solve against conservative component bounds supplied by another compositor. */
+export declare function evaluateContrastBounds(bounds: Readonly<ContrastBounds>, options?: Readonly<ContrastOptions>, previous?: 'light' | 'dark', fixed?: 'light' | 'dark'): ContrastEvaluation;
 /** Evaluate actual RGB samples. Protection is solved in sRGB, the compositor's mixing space. */
 export declare function evaluateContrast(samples: readonly RGB[], options?: Readonly<ContrastOptions>, previous?: 'light' | 'dark', fixed?: 'light' | 'dark'): ContrastEvaluation;
 ```
@@ -618,6 +624,19 @@ export declare function evaluateContrast(samples: readonly RGB[], options?: Read
 
 ```ts
 import { type GlassMaterial } from './material.js';
+export interface MaterialFootprint {
+    width: number;
+    height: number;
+    area?: number;
+}
+/** Exact union area of axis-aligned member rectangles; empty gaps add no area.
+ * Curved silhouettes and SDF bridges still require an application-supplied area. */
+export declare function measureMaterialFootprint(rects: readonly {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}[]): Required<MaterialFootprint>;
 export interface SizeAdaptation {
     referenceArea: number;
     thickness: number;
@@ -630,10 +649,7 @@ export interface SizeAdaptation {
 export declare const defaultSizeAdaptation: Readonly<SizeAdaptation>;
 export declare function createSizeAdaptation(options?: Partial<SizeAdaptation>): Readonly<SizeAdaptation>;
 /** Effective material at the current geometry; base parameters are never mutated. */
-export declare function resolveMaterialForSize(material: Readonly<GlassMaterial>, rect: {
-    width: number;
-    height: number;
-}, profile?: Readonly<SizeAdaptation>): Readonly<GlassMaterial>;
+export declare function resolveMaterialForSize(material: Readonly<GlassMaterial>, rect: Readonly<MaterialFootprint>, profile?: Readonly<SizeAdaptation>): Readonly<GlassMaterial>;
 ```
 
 ## effect-container
@@ -999,13 +1015,32 @@ export declare function bindDrag(renderer: GlassRenderer, element: HTMLElement, 
 
 ```ts
 import type { GlassRenderer, SurfaceHandle } from './renderer.js';
-import type { GlassMaterial } from './material.js';
+import { type GlassMaterial } from './material.js';
+import { type PhysicsOptions } from './physics.js';
+import type { SpringOptions } from './motion.js';
+export interface SelectionLiftOptions {
+    /** Width/height multipliers relative to the selected item's resting rectangle. */
+    scale?: readonly [
+        number,
+        number
+    ];
+    /** Lift offset in renderer CSS pixels. */
+    offset?: readonly [
+        number,
+        number
+    ];
+    material?: Partial<GlassMaterial>;
+    trackingSpring?: SpringOptions;
+    releaseSpring?: SpringOptions;
+}
 export interface LiquidSelectionOptions {
     id: string;
     items: readonly HTMLElement[];
     initialIndex?: number;
     vibrancy?: boolean;
     material?: Partial<GlassMaterial>;
+    physics?: PhysicsOptions;
+    lift?: SelectionLiftOptions;
     onSelect?: (index: number) => void;
 }
 export interface LiquidSelection {
@@ -1260,10 +1295,10 @@ export { GlassAnimation } from './animation.js';
 export type { AnimationFrame, AnimationCallback, AnimationOptions } from './animation.js';
 export { createMaterial, materials, materialRanges } from './material.js';
 export type { GlassMaterial, Quality, Appearance, RGB } from './material.js';
-export { createContrast, defaultContrast, contrastRatio, relativeLuminance, foregroundColors, protectionColors, evaluateContrast } from './contrast.js';
-export type { ContrastSettings, ContrastOptions, ContrastRegion, ContrastState, ForegroundAppearance, ContrastEvaluation } from './contrast.js';
-export { createSizeAdaptation, defaultSizeAdaptation, resolveMaterialForSize } from './size-adaptation.js';
-export type { SizeAdaptation } from './size-adaptation.js';
+export { createContrast, defaultContrast, contrastRatio, relativeLuminance, foregroundColors, protectionColors, evaluateContrast, evaluateContrastBounds } from './contrast.js';
+export type { ContrastSettings, ContrastOptions, ContrastRegion, ContrastState, ForegroundAppearance, ContrastEvaluation, ContrastBounds } from './contrast.js';
+export { createSizeAdaptation, defaultSizeAdaptation, resolveMaterialForSize, measureMaterialFootprint } from './size-adaptation.js';
+export type { SizeAdaptation, MaterialFootprint } from './size-adaptation.js';
 export { Spring } from './spring.js';
 export { roundedRectDistance, smoothUnion } from './geometry.js';
 export type { Rect } from './geometry.js';
@@ -1284,7 +1319,7 @@ export type { ScrollBehaviorOptions } from './scroll.js';
 export { bindDomBackdrop, supportsDomBackdrop } from './dom-backdrop.js';
 export type { DomBackdropBinding } from './dom-backdrop.js';
 export { bindLiquidSelection } from './selection.js';
-export type { LiquidSelection, LiquidSelectionOptions } from './selection.js';
+export type { LiquidSelection, LiquidSelectionOptions, SelectionLiftOptions } from './selection.js';
 export { bindLiquidHighlight } from './highlight.js';
 export type { LiquidHighlight, HighlightOptions } from './highlight.js';
 export { bindEnvironmentLight } from './environment.js';

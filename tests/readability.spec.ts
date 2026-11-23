@@ -47,6 +47,34 @@ test('Regular protects text over split black/white input and the asynchronous sa
     const gl=t.renderer.canvas.getContext('webgl2');return{ready,ratios,protection:s.state.contrast.protection,idle:b.frames-a.frames,sleeping:t.renderer.idle,readbacks:b.contrastReadbacks-a.contrastReadbacks,pack:gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING),error:gl.getError()};
   });expect(result.ratios.every((v:number)=>v>=4.5)).toBe(true);expect(result.protection).toBeGreaterThan(.1);expect(result.ready?.source).toBe('composited');expect(result.idle).toBe(0);expect(result.sleeping).toBe(true);expect(result.readbacks).toBe(0);expect(result.pack).toBeNull();expect(result.error).toBe(0);
 });
+test('conservative probes retain single-pixel stripes, isolated dots and odd-sized regions',async({page})=>{
+  await page.goto('/tests/harness.html');const result=await page.evaluate(async()=>{
+    const lib=await import('../src/index'),t=(window as any).testGlass;t.surface.remove();t.renderer.setAccessibility({reducedMotion:true});
+    const c=t.source.getContext('2d'),s=t.renderer.addSurface({id:'fine',rect:{x:41,y:33,width:237,height:173,radius:24},sizeAdaptation:false,material:{frost:0,refraction:0,highlight:0,reflection:0,ambientSpill:0,saturation:1}}),checks=[];
+    for(const [x,y,w,h]of[[103,0,2,240],[110,0,1,240],[0,121,320,1],[177,108,1,1],[220,137,1,1]]){
+      c.fillStyle='white';c.fillRect(0,0,320,240);c.fillStyle='black';c.fillRect(x,y,w,h);t.renderer.updateBackdrop();
+      const state=await s.contrastReady(),pixels=await t.capture(),fg=lib.foregroundColors[state.foreground as 'light'|'dark'];let minimum=21;
+      for(let yy=65;yy<175;yy++)for(let xx=70;xx<250;xx++){const i=(yy*320+xx)*4;minimum=Math.min(minimum,lib.contrastRatio([pixels[i]/255,pixels[i+1]/255,pixels[i+2]/255],fg));}
+      checks.push({ratio:state.ratio,minimum,meetsTarget:state.meetsTarget,protection:state.protection});
+    }
+    s.remove();c.fillStyle='white';c.fillRect(0,0,320,240);c.fillStyle='black';c.fillRect(103,0,2,240);t.renderer.updateBackdrop();
+    const unprotected=await t.renderer.addSurface({id:'no-budget',rect:{x:41,y:33,width:237,height:173,radius:24},sizeAdaptation:false,contrast:{protection:0},material:{frost:0,refraction:0,highlight:0,reflection:0,ambientSpill:0,saturation:1}}).contrastReady();
+    return{checks,unprotected,error:t.renderer.canvas.getContext('webgl2').getError()};
+  });
+  for(const check of result.checks){expect(check.minimum).toBeGreaterThanOrEqual(4.5);expect(check.meetsTarget).toBe(true);expect(check.ratio).toBeLessThanOrEqual(check.minimum+.03);expect(check.protection).toBeGreaterThan(.1);}
+  expect(result.unprotected?.meetsTarget).toBe(false);expect(result.unprotected?.ratio).toBeLessThan(1.3);expect(result.error).toBe(0);
+});
+
+test('dispersion survives full scattering for artistic and Cauchy wavelength coordinates',async({page})=>{
+  await page.goto('/tests/harness.html');const result=await page.evaluate(async()=>{
+    const t=(window as any).testGlass,c=t.source.getContext('2d');c.fillStyle='black';c.fillRect(0,0,320,240);c.fillStyle='white';c.fillRect(100,0,120,240);t.renderer.updateBackdrop();
+    t.surface.material({variant:'clear',appearance:'light',frost:1,scatterRadius:6,edgeWidth:24,refraction:22,dispersion:0,abbeNumber:0,saturation:1,reflection:0,highlight:0,edgeContrast:0,shadow:0},false);
+    const colorfulness=(p:number[])=>{let maximum=0;for(let y=80;y<160;y++)for(let x=85;x<235;x++){const i=(y*320+x)*4;maximum=Math.max(maximum,Math.max(...p.slice(i,i+3))-Math.min(...p.slice(i,i+3)));}return maximum;};
+    const neutral=colorfulness(await t.capture());t.surface.material({dispersion:5},false);const artistic=colorfulness(await t.capture());t.surface.material({dispersion:0,abbeNumber:5},false);const physical=colorfulness(await t.capture());
+    return{neutral,artistic,physical,error:t.renderer.canvas.getContext('webgl2').getError()};
+  });expect(result.neutral).toBeLessThan(3);expect(result.artistic).toBeGreaterThan(result.neutral+4);expect(result.physical).toBeGreaterThan(result.neutral+2);expect(result.error).toBe(0);
+});
+
 test('edge illumination remains programmable at bevel zero',async({page})=>{
   await page.goto('/tests/harness.html');const result=await page.evaluate(async()=>{
     const t=(window as any).testGlass,c=t.source.getContext('2d');c.fillStyle='#505050';c.fillRect(0,0,320,240);t.renderer.updateBackdrop();t.renderer.setLight(1,0,false);

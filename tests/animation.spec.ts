@@ -90,3 +90,22 @@ test('navigation lens lifts during a real pointer drag and snaps to its selected
   await page.mouse.up();await expect(settings).toHaveAttribute('aria-pressed','true');
   await expect.poll(()=>page.evaluate(()=>(window as any).motionStudio.renderer.getState('studio-navigation').rect.height)).toBeCloseTo(base,0);
 });
+
+test('selection lift exposes independent geometry, material and tracking/release profiles',async({page})=>{
+  await page.goto('/tests/harness.html');await page.evaluate(async()=>{
+    const lib=await import('../src/index'),t=(window as any).testGlass;t.surface.remove();const rail=document.createElement('div');rail.style.cssText='position:absolute;left:40px;top:80px;display:flex';
+    for(const name of['First','Second','Third']){const b=document.createElement('button');b.textContent=name;b.style.cssText='width:80px;height:40px';rail.append(b);}document.body.append(rail);
+    const items=[...rail.querySelectorAll('button')],count=t.renderer.stats.surfaces;let rejected=false;
+    try{lib.bindLiquidSelection(t.renderer,rail,{id:'invalid',items,lift:{scale:[0,2]}});}catch{rejected=true;}
+    if(!rejected||t.renderer.stats.surfaces!==count)throw new Error('Invalid lift changed the renderer');
+    (window as any).customSelection=lib.bindLiquidSelection(t.renderer,rail,{id:'custom-selection',items,physics:{press:{frequency:4,damping:1}},lift:{scale:[1.4,1.8],offset:[0,-8],trackingSpring:{frequency:12,damping:1},releaseSpring:{frequency:3.8,damping:.95},material:{magnification:1.3,dispersion:1.2}}});
+  });
+  const first=await page.getByRole('button',{name:'First',exact:true}).boundingBox(),last=await page.getByRole('button',{name:'Third',exact:true}).boundingBox();
+  await page.mouse.move(first!.x+40,first!.y+20);await page.mouse.down();await page.mouse.move(last!.x+40,last!.y+20,{steps:8});
+  await expect.poll(()=>page.evaluate(()=>(window as any).customSelection.surface.rect.height)).toBeCloseTo(72,0);
+  await expect.poll(()=>page.evaluate(()=>(window as any).customSelection.surface.state.baseMaterial.magnification)).toBeCloseTo(1.3,2);
+  expect(await page.evaluate(()=>{const p=(window as any).customSelection.surface.physics;return[p.geometry.frequency,p.press.frequency];})).toEqual([12,4]);
+  await page.mouse.up();await expect(page.getByRole('button',{name:'Third',exact:true})).toHaveAttribute('aria-pressed','true');
+  expect(await page.evaluate(()=>(window as any).customSelection.surface.physics.geometry.frequency)).toBe(3.8);
+  await expect.poll(()=>page.evaluate(()=>(window as any).customSelection.surface.state.baseMaterial.magnification)).toBeCloseTo(1,2);
+});

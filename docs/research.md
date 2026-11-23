@@ -17,6 +17,7 @@ The material's interaction vocabulary follows public Apple documentation. Its re
 
 - [Khronos: refract](https://registry.khronos.org/OpenGL-Refpages/gl4/html/refract.xhtml): the vector refraction function.
 - [Khronos: WebGL 2](https://registry.khronos.org/webgl/specs/latest/2.0/): texture, framebuffer and GLSL behavior.
+- [Physically Based Rendering: Specular Reflection and Transmission](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission): wavelength-dependent refractive index and spectral transmission.
 - [SCHOTT: optical glass data](https://www.schott.com/en-gb/products/optical-glass-p1000267): physical index/dispersion terminology. A physical glass dataset is not a specification of Apple's digital material.
 
 See [Ray optics](ray-optics.md) for the implemented equations and coordinate conventions, and [Compatibility](apple-audit.md) for an explicit feature boundary.

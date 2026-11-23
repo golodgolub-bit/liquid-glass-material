@@ -26,13 +26,13 @@ The mapping describes supported concepts, not a binary compatibility layer. UIKi
 |---|---|
 | Lensing | Screen-space source sampling with programmable optical normal/displacement |
 | Refractive indices | Explicit glass and outside indices; defaults are independent artistic parameters |
-| Dispersion | Artistic RGB split or optional Cauchy/Abbe RGB indices |
+| Dispersion | Artistic RGB split or optional Cauchy/Abbe RGB indices, across all scattering levels |
 | Two interfaces | Optional single transmitted ray with Snell, Fresnel and TIR; CPU/GPU verified |
 | Scattering | Two cached Gaussian levels; no volumetric multiple-scattering simulation |
 | Reflection | Directional response and environment map; no complete reflected 3D scene |
 | Rear glass | Completed lower layers and their content feed front-layer refraction |
 | Edge | Independent refraction, bevel, specular intensity/width and dark contour |
-| Readability | Composited regional GPU samples, automatic ink and bounded Regular protection |
+| Readability | Conservative per-pixel RGB bounds from the composited region, automatic ink and bounded Regular protection |
 | Size response | Configurable continuous thickness, refraction, frost, scattering and shadow scaling |
 | Color | RGBA8/sRGB; HDR, EDR and native tone mapping are absent |
 | Ambient spill | Local blurred-color surface/shadow approximation; no spatial indirect-light transport |

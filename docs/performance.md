@@ -1,5 +1,21 @@
 # Performance
 
+## v0.9: conservative RGB ranges and spectral scattering
+
+23 November 2026, Windows / Edge / Intel UHD Graphics (0x9B41), ANGLE D3D11; 800×500 at DPR 1. Each scene has 60 measured frames after warmup. Default readability and size response are enabled; the spectral run uses Vd=58. Empty rAF median is 16.7 ms. Analysis uses 32×32 lower/upper bound tiles and a shared native-resolution workspace.
+
+| Scene | Default GPU median / p95 | Spectral GPU median / p95 | Default / spectral frame p95 | Default CPU median / p95 |
+|---|---:|---:|---:|---:|
+| 1 surface | 0.55 / 1.56 ms | 0.57 / 0.82 ms | 19.8 / 19.7 ms | 2.0 / 4.2 ms |
+| 8 disjoint | 1.12 / 3.46 ms | 1.18 / 7.51 ms | 20.5 / 22.5 ms | 4.5 / 7.5 ms |
+| 24 disjoint | 2.38 / 8.68 ms | 2.52 / 14.39 ms | 23.4 / 21.7 ms | 6.9 / 14.7 ms |
+| 3 stacked | 2.29 / 2.53 ms | 2.30 / 2.51 ms | 19.0 / 17.4 ms | 2.4 / 4.7 ms |
+| 8 stacked | 7.92 / 11.97 ms | 7.32 / 7.90 ms | 18.9 / 19.1 ms | 2.0 / 5.4 ms |
+
+Both runs recorded one backdrop upload and zero idle frames after removing surfaces. Raw reports: [default](benchmarks/v0.9-hardware.json), [Cauchy](benchmarks/v0.9-hardware-spectral.json). GPU p95 includes intermittent analysis work and driver/scheduling noise; median-only comparisons hide this cost. CPU bounds are collapsed before solving, but regional copies, reduction draws, transfer and polling still cost time. Several frame p95 values exceed 16.67 ms. These short measurements do not establish sustained 60/120 Hz, Android performance or native parity, and the differences between separate runs are not proof of an optimization speedup.
+
+The default 15 Hz probe interval remains a latency/cost tradeoff. The conservative algorithm prevents thin rendered features from falling between sample points; it does not make readback free or eliminate stale measurements during rapid motion. Use a precise foreground region, one shared renderer and the lowest necessary overlap depth. See [Readability](readability.md).
+
 ## v0.8: composited readability enabled
 
 23 November 2026, Windows / Edge / Intel UHD Graphics (0x9B41), ANGLE D3D11; 800x500 at DPR 1. Each scene has 60 measured frames after warmup. Both runs enable default composited contrast probes (15 Hz maximum during continuous changes) and size response. The spectral run additionally enables Vd=58. Empty rAF median is 16.7 ms.

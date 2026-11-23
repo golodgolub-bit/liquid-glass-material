@@ -1,6 +1,6 @@
 {
   "name": "@liquid-glass/material",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Portable GPU glass material, spring motion and DOM bindings for WebGL 2 applications",
   "type": "module",
   "license": "MIT",

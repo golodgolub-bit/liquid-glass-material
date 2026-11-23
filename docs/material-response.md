@@ -35,7 +35,7 @@ Size adaptation is enabled by default. A small reference surface has area 5,760 
 | shadowRadius | 0.35 |
 | scatterRadius | 0.22 |
 
-Adaptation uses the current spring geometry, including intermediate frames. A union uses its enclosing geometric rectangle. Explicit deformation callbacks can change visual geometry independently and do not redefine this material scale.
+Adaptation uses the current spring geometry, including intermediate frames. A union uses the occupied union area of its member rectangles: overlaps count once and empty gaps do not make the material thicker. Rounded corners, free contours and SDF bridges are not measured by this rectangular estimate. This remains a general response model, rather than calibrated button/menu/sidebar profiles. Explicit deformation callbacks can change visual geometry independently and do not redefine this material scale.
 
 ```ts
 glass.sizeAdaptation({ referenceArea: 120 * 48, thickness: 0.4, frost: 0.12 });
@@ -54,3 +54,7 @@ glass.sizeAdaptation(false);           // fixed optical parameters for calibrati
 `shadowRadius` and `shadowOffset` control screen-space shadow falloff and displacement. `ambientSpill` introduces a small blurred-background chroma contribution to Regular and tints its dark shadow toward local background color. It approximates environmental coupling; it is not spatial indirect-light transport or a colored 3D caustic. Set it to zero for isolated optical measurements.
 
 All numeric fields animate through the material spring and are available in the shader ABI: `edgeFinish = (specularIntensity, specularWidth, shadowRadius, shadowOffset)` and `diffusion = (scatterRadius, ambientSpill)`. See [Programming the material](programmability.md) for full-pass replacements.
+
+## Custom footprint estimates
+
+`measureMaterialFootprint(rectangles)` returns `{width, height, area}` with exact axis-aligned rectangle union area, including negative coordinates. `resolveMaterialForSize(base, {width, height, area}, profile)` accepts an optional silhouette area supplied by the application; it must be positive and no larger than the bounding rectangle. Omitting area retains `width * height`. This lets custom components use a known SVG/mesh footprint instead of counting large empty regions. The renderer uses member-rectangle union area by default.

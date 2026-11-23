@@ -29,14 +29,16 @@ try {
   await mkdir(out,{recursive:true});const page=await browser.newPage();await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.locator('video').evaluate(v=>new Promise((resolve,reject)=>{if(v.readyState>=2)resolve();else{v.onloadeddata=resolve;v.onerror=reject;}}));
   if(process.argv[4]==='auto'){const duration=await page.locator('video').evaluate(v=>v.duration);times=Array.from({length:20},(_,i)=>(i+.1)/20*duration);}
-  const result=await page.evaluate(async(times)=>{
+  const result=await page.evaluate(async({times,fullFrames})=>{
     const v=document.querySelector('video');const cellW=400,cellH=Math.round(v.videoHeight/v.videoWidth*cellW)+24;
     const sheet=document.createElement('canvas');sheet.width=cellW*4;sheet.height=cellH*Math.ceil(times.length/4);
-    const c=sheet.getContext('2d');c.fillStyle='#111722';c.fillRect(0,0,sheet.width,sheet.height);c.font='14px monospace';
+    const c=sheet.getContext('2d');c.fillStyle='#111722';c.fillRect(0,0,sheet.width,sheet.height);c.font='14px monospace';const frames=[];
     for(let i=0;i<times.length;i++){
       v.currentTime=Math.min(v.duration-.02,times[i]);await new Promise(r=>v.addEventListener('seeked',r,{once:true}));
       const x=(i%4)*cellW,y=Math.floor(i/4)*cellH;c.drawImage(v,x,y+24,cellW,cellH-24);c.fillStyle='white';c.fillText(`${times[i].toFixed(2)} s`,x+6,y+17);
-    }return {duration:v.duration,width:v.videoWidth,height:v.videoHeight,png:sheet.toDataURL('image/png').split(',')[1]};
-  },times);
-  await writeFile(resolve(out,'motion-strip.png'),Buffer.from(result.png,'base64'));delete result.png;console.log(result);
+      if(fullFrames){const frame=document.createElement('canvas');frame.width=v.videoWidth;frame.height=v.videoHeight;frame.getContext('2d').drawImage(v,0,0);frames.push({time:times[i],png:frame.toDataURL('image/png').split(',')[1]});}
+    }return {duration:v.duration,width:v.videoWidth,height:v.videoHeight,png:sheet.toDataURL('image/png').split(',')[1],frames};
+  },{times,fullFrames:process.argv.includes('--frames')});
+  await writeFile(resolve(out,'motion-strip.png'),Buffer.from(result.png,'base64'));delete result.png;
+  for(const frame of result.frames)await writeFile(resolve(out,`frame-${frame.time.toFixed(3)}.png`),Buffer.from(frame.png,'base64'));delete result.frames;console.log(result);
 }finally{await browser.close();server.close();}

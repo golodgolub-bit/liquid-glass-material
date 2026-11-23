@@ -41,3 +41,8 @@ front.contrast(createContrast({appearance:"auto",region:{x:.2,width:.6}})).sizeA
 void front.contrastReady();void front.state.baseMaterial;void contrastRatio([1,1,1],[0,0,0]);void resolveMaterialForSize(materials.clearDimmed,{width:300,height:180});
 
 void renderer.idle;
+
+import {evaluateContrastBounds,measureMaterialFootprint} from '../dist/index.js';
+void evaluateContrastBounds({minimum:[0,0,0],maximum:[1,1,1]});
+void resolveMaterialForSize(materials.regular,measureMaterialFootprint([{x:0,y:0,width:120,height:48}]));
+const liftedSelection=bindLiquidSelection(renderer,parent,{id:'typed-lift',items:[parent],physics:{press:{frequency:4}},lift:{scale:[1.2,1.6],offset:[0,-4],trackingSpring:{frequency:12},releaseSpring:{frequency:4,damping:.9},material:{abbeNumber:58}}});liftedSelection.dispose();

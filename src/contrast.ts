@@ -27,6 +27,12 @@ export function createContrast(options:ContrastSettings={},base=defaultContrast)
 export function relativeLuminance(rgb:RGB):number{return rgb.reduce((sum,v,i)=>{const x=Math.max(0,Math.min(1,v));return sum+(x<=.04045?x/12.92:((x+.055)/1.055)**2.4)*[.2126,.7152,.0722][i];},0);}
 export function contrastRatio(a:RGB,b:RGB):number{const x=relativeLuminance(a),y=relativeLuminance(b);return(Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
 export interface ContrastEvaluation {foreground:'light'|'dark';ratio:number;protection:number;meetsTarget:boolean}
+export interface ContrastBounds {minimum:RGB;maximum:RGB}
+/** Solve against conservative component bounds supplied by another compositor. */
+export function evaluateContrastBounds(bounds:Readonly<ContrastBounds>,options:Readonly<ContrastOptions>=defaultContrast,previous:'light'|'dark'='dark',fixed?:'light'|'dark'):ContrastEvaluation{
+  if(bounds.minimum.length!==3||bounds.maximum.length!==3||bounds.minimum.some((v,i)=>!Number.isFinite(v)||v<0||v>1||!Number.isFinite(bounds.maximum[i])||bounds.maximum[i]<v||bounds.maximum[i]>1))throw new RangeError('Invalid contrast bounds');
+  return evaluateContrast([bounds.minimum,bounds.maximum],options,previous,fixed);
+}
 /** Evaluate actual RGB samples. Protection is solved in sRGB, the compositor's mixing space. */
 export function evaluateContrast(samples:readonly RGB[],options:Readonly<ContrastOptions>=defaultContrast,previous:'light'|'dark'='dark',fixed?:'light'|'dark'):ContrastEvaluation{
   if(!samples.length)throw new RangeError('Contrast evaluation requires samples');
@@ -39,7 +45,7 @@ export function evaluateContrast(samples:readonly RGB[],options:Readonly<Contras
     if(foreground>=lo&&foreground<=hi)return 1;
     return Math.min((Math.max(foreground,lo)+.05)/(Math.min(foreground,lo)+.05),(Math.max(foreground,hi)+.05)/(Math.min(foreground,hi)+.05));
   };
-  const required=(ink:'light'|'dark')=>{if(score(ink,0)>=options.minimumRatio)return 0;let lo=0,hi=options.protection;for(let i=0;i<10;i++){const m=(lo+hi)/2;if(score(ink,m)>=options.minimumRatio+.12)hi=m;else lo=m;}return hi;};
+  const required=(ink:'light'|'dark')=>{if(options.protection===0||score(ink,0)>=options.minimumRatio)return 0;let lo=0,hi=options.protection;for(let i=0;i<10;i++){const m=(lo+hi)/2;if(score(ink,m)>=options.minimumRatio+.12)hi=m;else lo=m;}return hi;};
   const dark=required('dark'),light=required('light');let foreground=fixed??(dark<light-.025?'dark':light<dark-.025?'light':score('dark',0)>score('light',0)?'dark':'light');
   if(!fixed&&Math.abs(dark-light)<.025&&score(previous,0)>=Math.max(score('dark',0),score('light',0))*.92)foreground=previous;
   const protection=foreground==='dark'?dark:light,ratio=score(foreground,protection);

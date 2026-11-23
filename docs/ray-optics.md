@@ -41,3 +41,5 @@ Only the single transmitted path is returned. Energy lost to reflection is accou
 Include `slabOpticsGLSL` in `createGlassShader({declarations})`, then call `traceSlab(incident, entryNormal, exitNormal, ior, outsideIor, thickness, gap)` from an optics hook. Its `SlabRay` contains `internalRay`, `outgoingRay`, `offset`, `pathLength`, scalar `transmission`, `tir` and `valid`. `valid=1` means the path reaches the background; `tir=1` specifically means total internal reflection. Add RGB absorption in your shade function if required.
 
 GPU and CPU results are tested against each other for normal, tilted, wedge and TIR cases. GPU invalid geometry returns `valid=0`; the CPU API throws for invalid inputs. The [live workbench](../examples/workbench/) demonstrates both models.
+
+Wavelength coordinates apply to sharp and both scattered transmission levels, including full frost. See [Dispersion and colored edges](dispersion.md) for the visual mechanism and an interactive comparison.

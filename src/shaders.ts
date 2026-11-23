@@ -163,17 +163,25 @@ void main() {
   vec2 refractUV=centerUV+(uv-centerUV)/zoom+displacement*texel;
   float edge=1.0-t;
   vec2 spectral=displacement*texel*optics.z*0.045;
-  vec3 transmitted = texture(backdrop,refractUV).rgb;
-  if (optics.z > 0.001) { transmitted.r = texture(backdrop,refractUV+spectral).r; transmitted.b = texture(backdrop,refractUV-spectral).b; }
+  vec2 redUV=refractUV+spectral,blueUV=refractUV-spectral;
   if(medium.y>0.0){
     opticalInput.ior=spectralIndex(656.2725)/medium.x;vec2 redRay=glassOptics(opticalInput).displacement;
     opticalInput.ior=spectralIndex(486.1327)/medium.x;vec2 blueRay=glassOptics(opticalInput).displacement;
-    transmitted.r=texture(backdrop,centerUV+(uv-centerUV)/zoom+redRay*texel).r;
-    transmitted.b=texture(backdrop,centerUV+(uv-centerUV)/zoom+blueRay*texel).b;
+    redUV=centerUV+(uv-centerUV)/zoom+redRay*texel;
+    blueUV=centerUV+(uv-centerUV)/zoom+blueRay*texel;
   }
+  bool chromatic=optics.z>.001||medium.y>0.0;
+  vec3 transmitted=texture(backdrop,refractUV).rgb;
+  if(chromatic){transmitted.r=texture(backdrop,redUV).r;transmitted.b=texture(backdrop,blueUV).b;}
   float frost = mix(optics.w, max(optics.w, 0.94), mode.z);
   vec3 nearScatter=texture(blurred,refractUV).rgb;
   vec3 wideScatter=texture(scatteredWide,refractUV).rgb;
+  // Wavelength-dependent coordinates also apply to the scattered transmission.
+  // Frost changes bandwidth, not the existence of dispersion.
+  if(chromatic){
+    nearScatter.r=texture(blurred,redUV).r;nearScatter.b=texture(blurred,blueUV).b;
+    wideScatter.r=texture(scatteredWide,redUV).r;wideScatter.b=texture(scatteredWide,blueUV).b;
+  }
   float nearWeight=clamp(diffusion.x*diffusion.x/36.0,0.0,1.0),wideWeight=clamp((diffusion.x*diffusion.x-36.0)/108.0,0.0,1.0);
   vec3 scattered=mix(mix(transmitted,nearScatter,nearWeight),wideScatter,wideWeight),ambient=texture(blurred,uv).rgb;
   float lum = luma(ambient);
