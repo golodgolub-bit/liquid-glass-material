@@ -1,3 +1,4 @@
+import {version} from './version';
 import {GlassRenderer,bindElement,bindDrag,bindLiquidSelection,bindMediaBackdrop,bindEnvironmentLight,createMaterial,materials,type BackdropSource,type GlassMaterial,type SurfaceHandle} from '../src';
 import {paintBackdrop,type BackdropName} from './backdrops';
 import {mountMotionStudio} from './motion-studio';
@@ -19,7 +20,7 @@ const snippet=`import { GlassRenderer, bindElement, bindDrag }\n  from '@liquid-
 $('#code-example').textContent=snippet;
 let toastTimer:ReturnType<typeof setTimeout>;
 const toast=(message:string)=>{$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),2400);};
-for(const[selector,text]of[['#copy-code',snippet],['#copy-install','npm install ./liquid-glass-material-0.8.1.tgz']])$(selector).addEventListener('click',async()=>{try{await navigator.clipboard.writeText(text);toast('Copied to clipboard');}catch{toast('Select and copy the code below');}});
+for(const[selector,text]of[['#copy-code',snippet],['#copy-install',`npm install ./liquid-glass-material-${version}.tgz`]])$(selector).addEventListener('click',async()=>{try{await navigator.clipboard.writeText(text);toast('Copied to clipboard');}catch{toast('Select and copy the code below');}});
 
 const canvas=$<HTMLCanvasElement>('#material-canvas'),stage=$('#stage'),backdrop=document.createElement('canvas');
 const renderer=new GlassRenderer(canvas,{measureGpu:true,onError:error=>{$('.stage-error').hidden=false;$('.stage-error').textContent=error.message;}});

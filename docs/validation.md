@@ -29,6 +29,6 @@ Windows WebView2 and Android WebView asset preparation are checked. Native SDK b
 
 ## Resource-constrained development
 
-Tests run with one worker. `NODE_OPTIONS=--max-old-space-size=192 --max-semi-space-size=2` limits Node heap use where necessary. Run builds, browser tests, benchmarking and recording sequentially. Production preview avoids file watching during recording. Generated documentation and artifact directories are excluded from development watchers.
+Tests run with one worker. `NODE_OPTIONS=--max-old-space-size=192 --max-semi-space-size=2` limits Node heap use where necessary. Run builds, browser tests, benchmarking and recording sequentially. Production preview avoids file watching during recording. Artifact directories are excluded from development watchers. Generated documentation remains watched so newly created pages become available without a manual server restart.
 
 The v0.10 control regressions verify dense versus refractive switch states, one change per user commit, programmatic updates without synthetic events, capture failure/cancellation, RTL, disabled state, native range semantics, minification, independent content opacity, narrow layouts, dark backgrounds and idle cleanup.

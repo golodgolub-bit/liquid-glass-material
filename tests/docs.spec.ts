@@ -2,8 +2,9 @@ import{test,expect}from'@playwright/test';
 test('documentation pages link to the complete API and a runnable text/reflection example',async({page})=>{
   await page.goto('/docs/');await expect(page.getByRole('heading',{name:'Liquid Glass Material — Developer Guide',exact:true})).toBeVisible();
   for(const name of['quick-start','basic-controls','switches','animation-basics','api','readability','material-response','comparison','programmability','ray-optics','apple-audit','text-under-glass','animations','reflections','integration','architecture','troubleshooting']){
-    const response=await page.request.get(`/docs/${name}.html`);expect(response.ok()).toBe(true);expect(await response.text()).not.toContain('href="undefined"');
+    const response=await page.request.get(`/docs/${name}.html`);expect(response.ok()).toBe(true);const html=await response.text();expect(html).not.toContain('href="undefined"');expect(html).toContain('id="pages"');expect(html).toContain('Documentation</small>');
   }
+  await page.goto('/examples/controls/');await page.getByRole('link',{name:'Build a switch ↗',exact:true}).click();await expect(page.getByRole('heading',{name:'Switches: from a dense thumb to glass',exact:true})).toBeVisible();
   await page.goto('/docs/api.html');await expect(page.getByRole('heading',{name:'GlassMaterial',exact:true})).toBeVisible();
   const malformed=await page.locator('table').evaluateAll(tables=>tables.flatMap(t=>{const width=t.querySelectorAll('thead th').length;return[...t.querySelectorAll('tbody tr')].filter(row=>row.querySelectorAll('td').length!==width).map(row=>row.textContent);}));expect(malformed).toEqual([]);
   await page.locator('#filter').fill('light and reflections');await expect(page.locator('#pages a:visible')).toHaveCount(1);await page.locator('#pages a:visible').click();await expect(page.getByRole('heading',{name:'Light and reflections',exact:true})).toBeVisible();
